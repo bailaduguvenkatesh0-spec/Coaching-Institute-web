@@ -20,7 +20,19 @@ export const Login: React.FC = () => {
       await login(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please verify credentials.');
+      const msg: string = err.message || '';
+      const isNetworkErr =
+        msg.includes('fetch') || msg.includes('Failed') ||
+        msg.includes('NetworkError') || msg.includes('ERR_') ||
+        msg.includes('Unable to reach') || msg.includes('ECONNREFUSED');
+      if (isNetworkErr) {
+        setError(
+          '⚠️ Backend is offline (Demo Mode). Use a demo credential from the quick-access buttons below, ' +
+          'or try again once the server wakes up (~30 s).'
+        );
+      } else {
+        setError(msg || 'Login failed. Please verify credentials.');
+      }
     } finally {
       setLoading(false);
     }

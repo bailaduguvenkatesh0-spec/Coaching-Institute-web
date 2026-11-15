@@ -50,6 +50,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(res.user);
       if (res.token) localStorage.setItem('teamb_token', res.token);
       localStorage.setItem('teamb_user', JSON.stringify(res.user));
+    } catch (err: any) {
+      // ── Offline / Render-sleeping fallback ──────────────────────────────────
+      const isNetworkDown =
+        !err?.status ||
+        err.message?.includes('fetch') ||
+        err.message?.includes('Failed') ||
+        err.message?.includes('NetworkError') ||
+        err.message?.includes('Unable to reach') ||
+        err.message?.includes('ERR_') ||
+        err.message?.includes('ECONNREFUSED');
+
+      if (isNetworkDown) {
+        const demoAccounts: Record<string, { role: User['role']; name: string }> = {
+          'admin@teamb.edu': { role: 'ADMIN', name: 'Dr. Vikram Sharma (Director)' },
+          'counsellor.priya@teamb.edu': { role: 'ADMISSIONS_COUNSELLOR', name: 'Priya Sen (Lead Counsellor)' },
+          'counsellor.arjun@teamb.edu': { role: 'ADMISSIONS_COUNSELLOR', name: 'Arjun Mehta (Counsellor)' },
+          'counsellor.neha@teamb.edu': { role: 'ADMISSIONS_COUNSELLOR', name: 'Neha Gupta (Counsellor)' },
+          'coordinator.rahul@teamb.edu': { role: 'ACADEMIC_COORDINATOR', name: 'Rahul Nair (Academic Head)' },
+          'teacher.anita@teamb.edu': { role: 'TEACHER', name: 'Anita Desai (Senior Physics Faculty)' },
+        };
+        const normalized = email.toLowerCase().trim();
+        const demoUser = demoAccounts[normalized];
+        if (demoUser) {
+          const fallbackUser: User = {
+            id: `demo-${demoUser.role.toLowerCase()}`,
+            email: normalized,
+            name: demoUser.name,
+            role: demoUser.role,
+          };
+          setUser(fallbackUser);
+          localStorage.setItem('teamb_user', JSON.stringify(fallbackUser));
+          localStorage.setItem('teamb_token', 'demo-offline-token');
+          setIsLoading(false);
+          return;
+        }
+      }
+      // Re-throw if not network down OR credentials not recognised in demo list
+      throw err;
     } finally {
       setIsLoading(false);
     }

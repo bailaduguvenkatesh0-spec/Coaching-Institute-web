@@ -2,10 +2,12 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from './Header.js';
 import { Sidebar } from './Sidebar.js';
+import { DemoBanner } from '../common/DemoBanner.js';
 
 export const AppLayout: React.FC = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-950 text-slate-100">
+      <DemoBanner />
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />

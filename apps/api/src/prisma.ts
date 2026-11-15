@@ -36,3 +36,4 @@ export async function checkDbConnection(): Promise<boolean> {
 }
 
 export { prismaInstance as prisma };
+
