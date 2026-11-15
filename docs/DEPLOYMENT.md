@@ -27,7 +27,7 @@ Render was evaluated from current official pricing docs. Its free web services s
 ## Current readiness blockers
 
 - API records use the in-memory demo store, not Prisma; restart loses all changes.
-- Local PostgreSQL is not running in the checked environment.
+- Local PostgreSQL is running in Docker and the initial Prisma migration is applied, but the API does not use it for its application records.
 - No GitHub remote/repository integration or provider credentials have been supplied.
 - Therefore no public frontend/API URL, persistent cloud database, or external-network verification exists yet.
 

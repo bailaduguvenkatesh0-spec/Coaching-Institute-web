@@ -33,7 +33,7 @@ The Prisma schema and an initial migration exist under `apps/api/prisma`, but th
 If Docker is available, the PostgreSQL Compose service uses a named volume and binds port 5432 only to `127.0.0.1` on the host:
 
 ```powershell
-docker compose up -d postgres
+docker compose up --pull always -d postgres
 npm run db:generate
 npm run db:migrate
 npm run db:seed

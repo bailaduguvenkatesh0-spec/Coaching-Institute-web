@@ -10,3 +10,4 @@ netsh advfirewall firewall add rule name="TEAM B Backend (Port 4000)" dir=in act
 echo.
 echo Firewall rules successfully configured!
 pause
+

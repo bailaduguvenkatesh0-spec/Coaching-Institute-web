@@ -15,6 +15,16 @@ describe('Phase 8: Webhook & End-to-End Automation Integration', () => {
     expect(res.body.storage).toEqual({ mode: 'in-memory-demo', persistent: false });
   });
 
+  it('allows a private-LAN web origin in development with credentialed CORS', async () => {
+    const res = await request(app)
+      .get('/api/health')
+      .set('Origin', 'http://192.168.1.25:5173');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBe('http://192.168.1.25:5173');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+
   beforeEach(() => {
     store.reset();
   });

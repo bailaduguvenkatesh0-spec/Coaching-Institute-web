@@ -15,7 +15,7 @@ The implementation work required before production persistence:
 For local PostgreSQL via Docker Compose:
 
 ```powershell
-docker compose up -d postgres
+docker compose up --pull always -d postgres
 npm run db:generate
 npm run db:migrate
 npm run db:seed

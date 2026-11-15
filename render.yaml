@@ -30,3 +30,4 @@ databases:
     region: singapore
     databaseName: teamb_db
     user: postgres
+

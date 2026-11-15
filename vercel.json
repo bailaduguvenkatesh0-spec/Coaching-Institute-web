@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run --workspace=@team-b/shared build && npm run --workspace=@team-b/web build",
+  "buildCommand": "npm run vercel-build",
   "outputDirectory": "apps/web/dist",
   "framework": "vite",
   "rewrites": [
@@ -9,3 +9,4 @@
     }
   ]
 }
+

@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "build": "npm run --workspace=@team-b/shared build && npm run --workspace=@team-b/api build && npm run --workspace=@team-b/web build",
+    "build:web": "npm run --workspace=@team-b/shared build && npm run --workspace=@team-b/web build",
+    "vercel-build": "npm run --workspace=@team-b/shared build && npm run --workspace=@team-b/web build",
     "lint": "npm run --workspaces --if-present lint",
     "test": "npm run --workspaces --if-present test && npm run test:workflows",
     "test:workflows": "vitest run n8n/validateWorkflows.test.ts",
