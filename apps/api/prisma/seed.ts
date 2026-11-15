@@ -10,6 +10,8 @@ import {
   SEED_SYSTEM_SETTINGS,
 } from '../src/store/seedData.js';
 
+import { seed100Students } from './seed-students.js';
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -208,6 +210,9 @@ async function main() {
       },
     });
   }
+
+  // 8. Seed 100 Demonstration Students & 4 Tech Courses
+  await seed100Students();
 
   console.log('--- SEEDING COMPLETED SUCCESSFULLY ---');
 }

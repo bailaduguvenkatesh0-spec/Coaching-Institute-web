@@ -11,6 +11,7 @@ import admissionsRoutes from './routes/admissions.js';
 import academicRoutes from './routes/academic.js';
 import automationRoutes from './routes/automation.js';
 import staffRoutes from './routes/staff.js';
+import studentsRoutes from './routes/students.js';
 import { checkDbConnection } from './prisma.js';
 import { config } from './config.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
@@ -305,6 +306,9 @@ export function createApp(): Express {
 
   // Mount Project 1: Admissions routes
   app.use('/api', admissionsRoutes);
+
+  // Mount Student Management routes (PostgreSQL-backed CRUD & Stats)
+  app.use('/api', studentsRoutes);
 
   // Mount Project 2: Academic routes
   app.use('/api', academicRoutes);

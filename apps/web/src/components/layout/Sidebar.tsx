@@ -46,7 +46,7 @@ const navSections: { title: string; items: NavItem[] }[] = [
   {
     title: 'PROJECT 2: ACADEMIC & ENGAGEMENT',
     items: [
-      { name: 'Students Directory', to: '/students', icon: GraduationCap },
+      { name: 'Students Management', to: '/students', icon: GraduationCap },
       { name: 'Attendance CSV Import', to: '/import-attendance', icon: UploadCloud },
       { name: 'At-Risk Rule Flags', to: '/at-risk', icon: AlertTriangle, badge: 'Rules' },
       { name: 'Coordinator Tasks', to: '/coordinator-tasks', icon: ClipboardList },

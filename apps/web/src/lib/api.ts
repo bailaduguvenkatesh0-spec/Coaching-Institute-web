@@ -217,9 +217,108 @@ function getDemoFallback(endpoint: string, options: RequestInit = {}): any {
     return { success: true, ...DEMO_DATA.dashboard };
   }
 
-  // Students
-  if (pathname.match(/\/api\/students|\/students/)) {
-    return { success: true, students: DEMO_DATA.students, total: DEMO_DATA.students.length };
+  // Courses
+  if (pathname === '/api/courses' || pathname === '/courses') {
+    return { success: true, courses: (DEMO_DATA as any).courses || [] };
+  }
+
+  // Student Stats
+  if (pathname === '/api/students/stats' || pathname === '/students/stats') {
+    return { success: true, stats: (DEMO_DATA as any).studentStats };
+  }
+
+  // Students list & POST
+  if (pathname === '/api/students' || pathname === '/students') {
+    if (options.method === 'POST') {
+      try {
+        const body = options.body ? JSON.parse(String(options.body)) : {};
+        const count = DEMO_DATA.students.length;
+        const studentId = `STU${String(count + 1).padStart(3, '0')}`;
+        const newStudent = {
+          id: `stu-${studentId.toLowerCase()}`,
+          studentId,
+          studentIdNumber: studentId,
+          fullName: body.fullName || body.name || 'New Student',
+          name: body.fullName || body.name || 'New Student',
+          email: body.email || `${studentId.toLowerCase()}@example.com`,
+          phone: body.phone || null,
+          courseId: body.courseId || null,
+          courseName: body.courseName || 'Java Full Stack',
+          admissionDate: body.admissionDate || new Date().toISOString(),
+          feeStatus: body.feeStatus || 'PENDING',
+          studentStatus: body.studentStatus || 'ACTIVE',
+          enrollmentStatus: body.studentStatus || 'ACTIVE',
+          isDemoData: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        (DEMO_DATA.students as any[]).unshift(newStudent);
+        return { success: true, student: newStudent, message: 'Student created successfully' };
+      } catch {
+        return { success: true, student: DEMO_DATA.students[0] };
+      }
+    }
+
+    let students = [...DEMO_DATA.students];
+    const page = Math.max(1, parseInt(params.get('page') || '1', 10));
+    const limit = Math.max(1, Math.min(100, parseInt(params.get('limit') || '10', 10)));
+    const search = params.get('search')?.toLowerCase().trim();
+    const course = params.get('courseId') || params.get('course');
+    const feeStatus = params.get('feeStatus');
+    const studentStatus = params.get('studentStatus');
+
+    if (search) {
+      students = students.filter(
+        (s: any) =>
+          (s.name && s.name.toLowerCase().includes(search)) ||
+          (s.studentIdNumber && s.studentIdNumber.toLowerCase().includes(search)) ||
+          (s.email && s.email.toLowerCase().includes(search)) ||
+          (s.courseName && s.courseName.toLowerCase().includes(search))
+      );
+    }
+
+    if (course) {
+      students = students.filter(
+        (s: any) => s.courseId === course || (s.courseName && s.courseName.toLowerCase() === course.toLowerCase())
+      );
+    }
+
+    if (feeStatus) {
+      students = students.filter((s: any) => s.feeStatus === feeStatus);
+    }
+
+    if (studentStatus) {
+      students = students.filter((s: any) => s.studentStatus === studentStatus);
+    }
+
+    const total = students.length;
+    const paginated = students.slice((page - 1) * limit, page * limit);
+
+    return {
+      success: true,
+      students: paginated,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
+  // Single student detail & PUT
+  if (pathname.match(/^\/api\/students\/[^/]+$/) || pathname.match(/^\/students\/[^/]+$/)) {
+    const id = pathname.split('/').pop();
+    if (options.method === 'PUT') {
+      try {
+        const body = options.body ? JSON.parse(String(options.body)) : {};
+        const idx = DEMO_DATA.students.findIndex((s: any) => s.id === id || s.studentIdNumber === id || s.studentId === id);
+        if (idx !== -1) {
+          (DEMO_DATA.students as any)[idx] = { ...(DEMO_DATA.students as any)[idx], ...body, updatedAt: new Date().toISOString() };
+          return { success: true, student: DEMO_DATA.students[idx], message: 'Student updated successfully' };
+        }
+      } catch {}
+    }
+    const student = DEMO_DATA.students.find((s: any) => s.id === id || s.studentIdNumber === id || s.studentId === id) || DEMO_DATA.students[0];
+    return { success: true, student };
   }
 
   // Counsellors

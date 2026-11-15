@@ -347,16 +347,36 @@ model LeadMergeReview {
 // PROJECT 2: ACADEMIC DOMAIN ENTITIES
 // -----------------------------------------------------------------------------
 
-model Student {
-  id               String   @id @default(uuid())
-  studentIdNumber  String   @unique
-  name             String
-  email            String   @unique
-  phone            String?
-  enrollmentStatus String   @default("ACTIVE") // ACTIVE, SUSPENDED, GRADUATED
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+enum FeeStatus {
+  PAID
+  PARTIALLY_PAID
+  PENDING
+}
 
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  COMPLETED
+}
+
+model Student {
+  id               String         @id @default(uuid())
+  studentIdNumber  String         @unique
+  studentId        String?
+  name             String
+  fullName         String?
+  email            String         @unique
+  phone            String?
+  courseId         String?
+  admissionDate    DateTime?      @default(now())
+  feeStatus        FeeStatus      @default(PENDING)
+  studentStatus    StudentStatus  @default(ACTIVE)
+  enrollmentStatus String         @default("ACTIVE") // ACTIVE, SUSPENDED, GRADUATED
+  isDemoData       Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  course            Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
   enrolments        Enrolment[]
   guardians         Guardian[]
   attendanceRecords AttendanceRecord[]
@@ -368,6 +388,9 @@ model Student {
   messageApprovals  MessageApproval[]
 
   @@index([studentIdNumber])
+  @@index([courseId])
+  @@index([feeStatus])
+  @@index([studentStatus])
   @@map("students")
 }
 
@@ -378,7 +401,8 @@ model Course {
   description String?
   createdAt   DateTime @default(now())
 
-  classes Class[]
+  classes  Class[]
+  students Student[]
 
   @@map("courses")
 }
