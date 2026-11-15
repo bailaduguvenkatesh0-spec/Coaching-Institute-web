@@ -151,14 +151,35 @@ export const Login: React.FC = () => {
               </button>
             </div>
           </div>
-          {/* Public Portal Link */}
-          <div className="pt-2 text-center text-xs">
+          {/* Public Portal & API Config Link */}
+          <div className="pt-2 flex flex-col items-center space-y-1.5 text-xs">
             <Link
               to="/enquire"
               className="text-cyan-400 hover:text-cyan-300 font-medium transition"
             >
               Looking for student admissions? Open Public Enquiry Form &rarr;
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                const current = localStorage.getItem('teamb_api_url') || ((import.meta.env.VITE_API_URL as string) || 'Default (/api)');
+                const newUrl = window.prompt(
+                  'Configure Backend API URL (leave blank to reset to default):',
+                  current === 'Default (/api)' ? '' : current
+                );
+                if (newUrl !== null) {
+                  if (newUrl.trim()) {
+                    localStorage.setItem('teamb_api_url', newUrl.trim());
+                  } else {
+                    localStorage.removeItem('teamb_api_url');
+                  }
+                  window.location.reload();
+                }
+              }}
+              className="text-[11px] text-slate-500 hover:text-slate-300 font-mono transition underline underline-offset-2"
+            >
+              Configure Backend URL
+            </button>
           </div>
         </div>
       </div>

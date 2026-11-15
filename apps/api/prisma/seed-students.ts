@@ -308,3 +308,4 @@ if (process.argv[1]?.includes('seed-students')) {
       await prisma.$disconnect();
     });
 }
+

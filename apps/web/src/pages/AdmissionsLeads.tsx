@@ -188,13 +188,35 @@ export const AdmissionsLeads: React.FC = () => {
               <p className="text-[11px] text-rose-300/80">{(error as any)?.message || 'Network or server error'}</p>
             </div>
           </div>
-          <button
-            onClick={() => refetch()}
-            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center space-x-1.5 shadow"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => {
+                const current = localStorage.getItem('teamb_api_url') || '';
+                const newUrl = window.prompt(
+                  'Enter backend API URL (e.g. https://teamb-coaching-platform.onrender.com or leave blank for default):',
+                  current
+                );
+                if (newUrl !== null) {
+                  if (newUrl.trim()) {
+                    localStorage.setItem('teamb_api_url', newUrl.trim());
+                  } else {
+                    localStorage.removeItem('teamb_api_url');
+                  }
+                  window.location.reload();
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+            >
+              Set API URL
+            </button>
+            <button
+              onClick={() => refetch()}
+              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center space-x-1.5 shadow"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+          </div>
         </div>
       )}
 

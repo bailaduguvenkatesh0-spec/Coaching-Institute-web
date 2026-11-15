@@ -11,6 +11,26 @@ export function isBackendUnreachable() {
   return backendUnreachable;
 }
 
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('teamb_api_url');
+    if (custom !== null) return custom;
+  }
+  return ((import.meta.env.VITE_API_URL as string) || '').trim().replace(/\/+$/, '');
+}
+
+export function setApiBaseUrl(url: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('teamb_api_url', url.trim().replace(/\/+$/, ''));
+  }
+}
+
+export function resetApiBaseUrl() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('teamb_api_url');
+  }
+}
+
 export async function fetchApi<T = any>(
   endpoint: string,
   options: RequestInit = {}
@@ -26,7 +46,8 @@ export async function fetchApi<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  let apiBase = ((import.meta.env.VITE_API_URL as string) || '').trim().replace(/\/+$/, '');
+  const customApiUrl = typeof window !== 'undefined' ? localStorage.getItem('teamb_api_url') : null;
+  let apiBase = (customApiUrl !== null ? customApiUrl : (import.meta.env.VITE_API_URL as string) || '').trim().replace(/\/+$/, '');
   let normalizedEndpoint = endpoint;
 
   if (apiBase && apiBase.endsWith('/api') && normalizedEndpoint.startsWith('/api/')) {
@@ -100,6 +121,37 @@ export async function fetchApi<T = any>(
 function getDemoFallback(endpoint: string, options: RequestInit = {}): any {
   const [pathname, queryString] = endpoint.split('?');
   const params = new URLSearchParams(queryString || '');
+
+  // Auth Login Fallback
+  if (pathname === '/api/auth/login' || pathname === '/auth/login') {
+    let email = 'admin@teamb.edu';
+    try {
+      const body = options.body ? JSON.parse(String(options.body)) : {};
+      if (body.email) email = body.email;
+    } catch {}
+    const demoAccounts: Record<string, { role: string; name: string }> = {
+      'admin@teamb.edu': { role: 'ADMIN', name: 'Dr. Vikram Sharma (Director)' },
+      'counsellor.priya@teamb.edu': { role: 'ADMISSIONS_COUNSELLOR', name: 'Priya Sen (Lead Counsellor)' },
+      'counsellor.arjun@teamb.edu': { role: 'ADMISSIONS_COUNSELLOR', name: 'Arjun Mehta (Counsellor)' },
+      'counsellor.neha@teamb.edu': { role: 'ADMISSIONS_COUNSELLOR', name: 'Neha Gupta (Counsellor)' },
+      'coordinator.rahul@teamb.edu': { role: 'ACADEMIC_COORDINATOR', name: 'Rahul Nair (Academic Head)' },
+      'teacher.anita@teamb.edu': { role: 'TEACHER', name: 'Anita Desai (Senior Physics Faculty)' },
+    };
+    const norm = email.toLowerCase().trim();
+    const demoUser = demoAccounts[norm] || { role: 'ADMIN', name: 'Dr. Vikram Sharma (Director)' };
+    const user = {
+      id: `demo-${demoUser.role.toLowerCase()}`,
+      email: norm,
+      name: demoUser.name,
+      role: demoUser.role,
+    };
+    return {
+      success: true,
+      user,
+      token: 'demo-offline-token',
+      isDemoMode: true,
+    };
+  }
 
   // Leads list & POST
   if (pathname === '/api/leads' || pathname === '/leads') {
@@ -334,6 +386,24 @@ function getDemoFallback(endpoint: string, options: RequestInit = {}): any {
   // Admissions Analytics
   if (pathname.match(/\/api\/admissions\/analytics|\/admissions\/analytics/)) {
     return { success: true, ...DEMO_DATA.admissionsAnalytics };
+  }
+
+  // Academic Analytics
+  if (pathname.match(/\/api\/academic\/analytics|\/academic\/analytics/)) {
+    return {
+      success: true,
+      metrics: {
+        overallAttendancePercentage: 86.4,
+        atRiskAlertCount: 2,
+        classWise: [
+          { classCode: 'BATCH-JEE-A', className: 'JEE Alpha Batch (Morning)', attendancePercentage: 88.5 },
+          { classCode: 'BATCH-NEET-B', className: 'NEET Pinnacle Batch', attendancePercentage: 84.2 },
+          { classCode: 'BATCH-FND-C', className: 'Foundation Achievers', attendancePercentage: 87.1 },
+          { classCode: 'BATCH-JAVA-A', className: 'Java Full Stack Morning Batch', attendancePercentage: 85.0 },
+          { classCode: 'BATCH-PY-B', className: 'Python Full Stack Evening Batch', attendancePercentage: 86.8 },
+        ],
+      },
+    };
   }
 
   // Health check
