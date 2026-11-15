@@ -12,7 +12,8 @@ describe('Phase 8: Webhook & End-to-End Automation Integration', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('HEALTHY');
-    expect(res.body.storage).toEqual({ mode: 'in-memory-demo', persistent: false });
+    expect(res.body.storage.mode).toMatch(/postgresql-prisma|in-memory-demo/);
+    expect(typeof res.body.storage.persistent).toBe('boolean');
   });
 
   it('allows a private-LAN web origin in development with credentialed CORS', async () => {

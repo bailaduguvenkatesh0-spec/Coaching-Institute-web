@@ -285,3 +285,4 @@ export const DEMO_DATA = {
     missingAssignmentsLimit: 3,
   },
 };
+

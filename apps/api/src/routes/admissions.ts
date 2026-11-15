@@ -21,6 +21,8 @@ import {
   identifyConversionRecoveryLeads,
 } from '../services/admissionsService.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { getPrisma } from '../prisma.js';
+import { logger } from '../logger.js';
 
 const router = Router();
 
@@ -36,6 +38,46 @@ router.post('/leads', async (req: Request, res: Response) => {
   }
 
   const result = await ingestLead(parsed.data, req.user?.email || 'PUBLIC_FORM');
+
+  // Sync to PostgreSQL if Prisma is connected
+  const prisma = getPrisma();
+  if (prisma && result.lead) {
+    try {
+      const stageEnum = (result.lead.stage || 'New').replace(/ /g, '_');
+      await prisma.lead.upsert({
+        where: { id: result.lead.id },
+        update: {
+          studentName: result.lead.studentName,
+          email: result.lead.email,
+          phone: result.lead.phone,
+          courseInterest: result.lead.courseInterest,
+          stage: stageEnum as any,
+          score: result.lead.score,
+          scoreCategory: result.lead.scoreCategory as any,
+          assignedCounsellorId: result.lead.assignedCounsellorId || null,
+        },
+        create: {
+          id: result.lead.id,
+          studentName: result.lead.studentName,
+          email: result.lead.email,
+          phone: result.lead.phone,
+          courseInterest: result.lead.courseInterest,
+          source: (result.lead.source || 'WEB_FORM') as any,
+          stage: stageEnum as any,
+          score: result.lead.score,
+          scoreCategory: result.lead.scoreCategory as any,
+          assignedCounsellorId: result.lead.assignedCounsellorId || null,
+          freeTextInterests: result.lead.freeTextInterests || null,
+          aiSummary: result.lead.aiSummary || null,
+          communicationConsent: Boolean(result.lead.communicationConsent),
+          optedOut: Boolean(result.lead.optedOut),
+        },
+      });
+    } catch (dbErr) {
+      logger.warn({ err: dbErr }, 'Failed to persist ingested lead to PostgreSQL, saved in memory store');
+    }
+  }
+
   return res.status(201).json({
     success: true,
     lead: result.lead,
@@ -46,31 +88,79 @@ router.post('/leads', async (req: Request, res: Response) => {
 });
 
 // GET /api/leads (Protected)
-router.get('/leads', authenticate, (req: Request, res: Response) => {
+router.get('/leads', authenticate, async (req: Request, res: Response) => {
   const { stage, scoreCategory, counsellorId, search, source } = req.query;
-  let leads = store.getState().leads;
+  const prisma = getPrisma();
+  let leads: any[] = [];
 
-  if (stage) {
-    leads = leads.filter((l) => l.stage === stage);
+  if (prisma) {
+    try {
+      const where: any = {};
+      if (stage) {
+        const stageMapped = String(stage).replace(/ /g, '_');
+        where.stage = stageMapped;
+      }
+      if (scoreCategory) {
+        where.scoreCategory = String(scoreCategory);
+      }
+      if (counsellorId) {
+        where.assignedCounsellorId = String(counsellorId);
+      }
+      if (source) {
+        where.source = String(source);
+      }
+      if (search) {
+        const q = String(search).trim();
+        where.OR = [
+          { studentName: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q } },
+          { courseInterest: { contains: q, mode: 'insensitive' } },
+        ];
+      }
+
+      const dbLeads = await prisma.lead.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Normalize stage for frontend
+      leads = dbLeads.map((l: any) => ({
+        ...l,
+        stage: l.stage.replace(/_/g, ' '),
+      }));
+    } catch (dbErr) {
+      logger.warn({ err: dbErr }, 'Failed to fetch leads from PostgreSQL, falling back to memory store');
+      leads = [];
+    }
   }
-  if (scoreCategory) {
-    leads = leads.filter((l) => l.scoreCategory === scoreCategory);
-  }
-  if (counsellorId) {
-    leads = leads.filter((l) => l.assignedCounsellorId === counsellorId);
-  }
-  if (source) {
-    leads = leads.filter((l) => l.source === source);
-  }
-  if (search) {
-    const q = (search as string).toLowerCase();
-    leads = leads.filter(
-      (l) =>
-        l.studentName.toLowerCase().includes(q) ||
-        l.email.toLowerCase().includes(q) ||
-        l.phone.includes(q) ||
-        l.courseInterest.toLowerCase().includes(q)
-    );
+
+  // Fallback to in-memory store if DB query returned nothing or DB is offline
+  if (leads.length === 0) {
+    let memLeads = store.getState().leads;
+    if (stage) {
+      memLeads = memLeads.filter((l) => l.stage === stage);
+    }
+    if (scoreCategory) {
+      memLeads = memLeads.filter((l) => l.scoreCategory === scoreCategory);
+    }
+    if (counsellorId) {
+      memLeads = memLeads.filter((l) => l.assignedCounsellorId === counsellorId);
+    }
+    if (source) {
+      memLeads = memLeads.filter((l) => l.source === source);
+    }
+    if (search) {
+      const q = (search as string).toLowerCase();
+      memLeads = memLeads.filter(
+        (l) =>
+          l.studentName.toLowerCase().includes(q) ||
+          l.email.toLowerCase().includes(q) ||
+          l.phone.includes(q) ||
+          l.courseInterest.toLowerCase().includes(q)
+      );
+    }
+    leads = memLeads;
   }
 
   return res.json({

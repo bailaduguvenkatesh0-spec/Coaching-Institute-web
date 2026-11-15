@@ -11,6 +11,7 @@ import admissionsRoutes from './routes/admissions.js';
 import academicRoutes from './routes/academic.js';
 import automationRoutes from './routes/automation.js';
 import staffRoutes from './routes/staff.js';
+import { checkDbConnection } from './prisma.js';
 import { config } from './config.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 
@@ -110,14 +111,30 @@ export function createApp(): Express {
   }
 
   // Health check endpoint (accessible at both /health and /api/health)
-  const healthHandler = (req: Request, res: Response) => {
-    return res.json({
-      status: 'HEALTHY',
+  const healthHandler = async (req: Request, res: Response) => {
+    let dbConnected = false;
+    try {
+      dbConnected = await checkDbConnection();
+    } catch {
+      dbConnected = false;
+    }
+
+    const isHealthy = dbConnected || config.env !== 'production';
+
+    return res.status(isHealthy ? 200 : 503).json({
+      status: dbConnected ? 'HEALTHY' : 'DEGRADED',
       service: 'TEAM B Coaching Institute API',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      demoMode: config.env !== 'production',
-      storage: { mode: 'in-memory-demo', persistent: false },
+      demoMode: !dbConnected,
+      database: {
+        connected: dbConnected,
+        dialect: 'postgresql',
+      },
+      storage: {
+        mode: dbConnected ? 'postgresql-prisma' : 'in-memory-fallback',
+        persistent: dbConnected,
+      },
       endpoints: {
         frontend: config.frontendUrl,
         publicEnquiry: '/enquire',
