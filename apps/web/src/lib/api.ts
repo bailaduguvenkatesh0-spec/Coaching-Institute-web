@@ -13,14 +13,36 @@ export async function fetchApi<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
-  const apiEndpoint = apiBase && endpoint.startsWith('/') ? `${apiBase}${endpoint}` : endpoint;
+  let apiBase = ((import.meta.env.VITE_API_URL as string) || '').trim().replace(/\/+$/, '');
+  let normalizedEndpoint = endpoint;
 
-  const res = await fetch(apiEndpoint, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  if (apiBase && apiBase.endsWith('/api') && normalizedEndpoint.startsWith('/api/')) {
+    normalizedEndpoint = normalizedEndpoint.slice(4);
+  }
+
+  const apiEndpoint = apiBase && normalizedEndpoint.startsWith('/')
+    ? `${apiBase}${normalizedEndpoint}`
+    : normalizedEndpoint;
+
+  let res: Response;
+  try {
+    res = await fetch(apiEndpoint, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (netErr: any) {
+    const isNetworkOrCors = netErr?.name === 'TypeError' && netErr?.message?.includes('fetch');
+    if (isNetworkOrCors) {
+      const destination = apiBase || window.location.origin;
+      throw new Error(
+        `Unable to reach API server at ${destination}. ` +
+        `The backend service may be spinning up, offline, or rejecting requests. ` +
+        `Verify the backend is live at ${destination}/api/health.`
+      );
+    }
+    throw netErr;
+  }
 
   const data = await res.json().catch(() => ({}));
 

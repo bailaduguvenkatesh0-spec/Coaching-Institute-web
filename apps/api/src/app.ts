@@ -15,8 +15,55 @@ import { apiLimiter } from './middleware/rateLimiter.js';
 
 const webDistPath = path.resolve(__dirname, '../../web/dist');
 
+function isAllowedOrigin(origin: string): boolean {
+  if (!origin) return true;
+  const normalized = origin.trim().replace(/\/+$/, '');
+
+  // 1. Explicitly configured origins from env (CORS_ORIGINS, FRONTEND_URL, APP_URL)
+  if (config.corsOrigins.some((allowed) => allowed === normalized || allowed === '*')) {
+    return true;
+  }
+
+  // 2. Allow all Vercel domains (production & branch previews)
+  if (normalized.endsWith('.vercel.app')) {
+    return true;
+  }
+
+  // 3. Allow all Render domains
+  if (normalized.endsWith('.onrender.com')) {
+    return true;
+  }
+
+  // 4. Allow all Netlify domains
+  if (normalized.endsWith('.netlify.app')) {
+    return true;
+  }
+
+  // 5. Localhost and private LAN RFC1918 IPv4 (same Wi-Fi mobile testing)
+  try {
+    const url = new URL(normalized);
+    const hostname = url.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+    const octets = hostname.split('.').map(Number);
+    if (
+      octets.length === 4 &&
+      octets.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) &&
+      (octets[0] === 10 || (octets[0] === 192 && octets[1] === 168) || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31))
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 export function createApp(): Express {
   const app = express();
+
+  // Trust reverse proxy (Render, Cloudflare, Vercel) for accurate client IPs and secure cookies
+  app.set('trust proxy', 1);
 
   // Security & standard middleware
   app.use(
@@ -25,30 +72,28 @@ export function createApp(): Express {
     })
   );
 
-  app.use(
-    cors({
-      origin(origin, callback) {
-        if (!origin) return callback(null, true);
-        const normalizedOrigin = origin.replace(/\/$/, '');
-        if (config.corsOrigins.includes(normalizedOrigin)) return callback(null, true);
+  const corsOptions: cors.CorsOptions = {
+    origin(origin, callback) {
+      if (!origin || isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'X-Idempotency-Key',
+      'Accept',
+      'Origin',
+    ],
+    exposedHeaders: ['Set-Cookie'],
+  };
 
-        if (config.env !== 'production') {
-          try {
-            const hostname = new URL(normalizedOrigin).hostname;
-            const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
-            const octets = hostname.split('.').map(Number);
-            const isPrivateIPv4 = octets.length === 4 && octets.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) &&
-              (octets[0] === 10 || (octets[0] === 192 && octets[1] === 168) || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31));
-            if (isLocalHost || isPrivateIPv4) return callback(null, true);
-          } catch {
-            // Reject malformed origins below.
-          }
-        }
-        return callback(null, false);
-      },
-      credentials: true,
-    })
-  );
+  app.use(cors(corsOptions));
+  app.options('*', cors(corsOptions));
 
   app.use('/api', apiLimiter);
   app.use(cookieParser());

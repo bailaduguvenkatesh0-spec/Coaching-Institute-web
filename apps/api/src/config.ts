@@ -16,10 +16,10 @@ export const config = {
   appTimezone: process.env.APP_TIMEZONE || 'Asia/Kolkata',
   n8nSharedWebhookSecret: process.env.N8N_WEBHOOK_SECRET || process.env.N8N_SHARED_WEBHOOK_SECRET || 'teamb-n8n-shared-secret-demo',
   llmProvider: process.env.LLM_PROVIDER || 'mock',
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
-  corsOrigins: (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:5173')
+  frontendUrl: process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173',
+  corsOrigins: (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173')
     .split(',')
-    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
     .filter(Boolean),
   emailProvider: process.env.EMAIL_PROVIDER || 'demo',
 };
