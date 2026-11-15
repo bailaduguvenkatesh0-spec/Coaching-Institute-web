@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import admissionsRoutes from './routes/admissions.js';
 import academicRoutes from './routes/academic.js';
 import automationRoutes from './routes/automation.js';
+import staffRoutes from './routes/staff.js';
 import { config } from './config.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 
@@ -254,6 +255,14 @@ export function createApp(): Express {
           'GET /api/dashboard',
           'GET /api/dashboard/overview',
         ],
+        staff: [
+          'GET /api/staff',
+          'GET /api/staff/stats',
+          'GET /api/staff/:id',
+          'POST /api/staff',
+          'PUT /api/staff/:id',
+          'DELETE /api/staff/:id',
+        ],
         automation: [
           'POST /api/webhooks/n8n/lead',
           'POST /api/webhooks/n8n/counsellor-assignment',
@@ -282,6 +291,9 @@ export function createApp(): Express {
 
   // Mount Project 2: Academic routes
   app.use('/api', academicRoutes);
+
+  // Mount Staff Management routes
+  app.use('/api', staffRoutes);
 
   // Mount n8n Webhook & Automation routes
   app.use('/api', automationRoutes);

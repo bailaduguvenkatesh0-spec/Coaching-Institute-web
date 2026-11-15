@@ -13,3 +13,4 @@ echo ======================================================
 echo Finished! Check the output above. If pushed successfully, Vercel will now auto-redeploy.
 echo ======================================================
 pause
+

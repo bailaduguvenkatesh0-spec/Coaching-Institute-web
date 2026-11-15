@@ -6,6 +6,7 @@ import {
   SEED_CLASSES,
   SEED_STUDENTS,
   SEED_LEADS,
+  SEED_STAFF,
   SEED_SYSTEM_SETTINGS,
 } from '../src/store/seedData.js';
 
@@ -148,10 +149,22 @@ async function main() {
   }
 
   // 6. Seed Leads
+  const stageMap: Record<string, any> = {
+    'New': 'New',
+    'Contacted': 'Contacted',
+    'Counselling Booked': 'Counselling_Booked',
+    'Attended': 'Attended',
+    'Application Started': 'Application_Started',
+    'Enrolled': 'Enrolled',
+    'Lost': 'Lost',
+    'Nurture': 'Nurture',
+  };
+
   for (const l of SEED_LEADS) {
+    const mappedStage = stageMap[l.stage] || l.stage;
     await prisma.lead.upsert({
       where: { id: l.id },
-      update: { stage: l.stage as any, score: l.score, scoreCategory: l.scoreCategory as any },
+      update: { stage: mappedStage, score: l.score, scoreCategory: l.scoreCategory as any },
       create: {
         id: l.id,
         studentName: l.studentName,
@@ -163,7 +176,7 @@ async function main() {
         preferredStartDate: l.preferredStartDate ? new Date(l.preferredStartDate) : null,
         preferredCounsellingTime: l.preferredCounsellingTime,
         source: l.source as any,
-        stage: l.stage as any,
+        stage: mappedStage,
         score: l.score,
         scoreCategory: l.scoreCategory as any,
         assignedCounsellorId: l.assignedCounsellorId,
@@ -171,6 +184,27 @@ async function main() {
         aiSummary: l.aiSummary,
         communicationConsent: l.communicationConsent,
         optedOut: l.optedOut,
+      },
+    });
+  }
+
+  // 7. Seed Staff Members
+  for (const s of SEED_STAFF) {
+    await prisma.staff.upsert({
+      where: { staffId: s.staffId },
+      update: { fullName: s.fullName, employmentStatus: s.employmentStatus },
+      create: {
+        id: s.id,
+        staffId: s.staffId,
+        fullName: s.fullName,
+        email: s.email,
+        phone: s.phone,
+        designation: s.designation,
+        department: s.department,
+        joiningDate: s.joiningDate ? new Date(s.joiningDate) : null,
+        employmentStatus: s.employmentStatus,
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
       },
     });
   }

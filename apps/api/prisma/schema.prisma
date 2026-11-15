@@ -89,6 +89,32 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+model Staff {
+  id               String           @id @default(uuid())
+  staffId          String           @unique
+  fullName         String
+  email            String?          @unique
+  phone            String?
+  designation      String?
+  department       String?
+  joiningDate      DateTime?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([staffId])
+  @@index([department])
+  @@index([employmentStatus])
+  @@map("staff")
+}
+
 // -----------------------------------------------------------------------------
 // PROJECT 1: ADMISSIONS DOMAIN ENTITIES
 // -----------------------------------------------------------------------------

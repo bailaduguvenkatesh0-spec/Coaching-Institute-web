@@ -29,7 +29,10 @@ interface NavItem {
 const navSections: { title: string; items: NavItem[] }[] = [
   {
     title: 'GENERAL',
-    items: [{ name: 'Overview Dashboard', to: '/', icon: LayoutDashboard }],
+    items: [
+      { name: 'Overview Dashboard', to: '/', icon: LayoutDashboard },
+      { name: 'Staff Management', to: '/staff', icon: Users, badge: '5' },
+    ],
   },
   {
     title: 'PROJECT 1: ADMISSIONS',

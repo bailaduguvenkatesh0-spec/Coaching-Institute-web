@@ -16,6 +16,10 @@ import {
   ShieldAlert,
   ArrowRight,
   CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  Loader2,
+  Plus,
 } from 'lucide-react';
 
 const STAGES = [
@@ -36,9 +40,23 @@ export const AdmissionsLeads: React.FC = () => {
   const [stageFilter, setStageFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
+  const [addLeadError, setAddLeadError] = useState<string | null>(null);
+  const [newLead, setNewLead] = useState({
+    studentName: '',
+    email: '',
+    phone: '',
+    courseInterest: 'JEE Advanced FastTrack',
+  });
 
   // Fetch Leads
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['leads', search, stageFilter, categoryFilter],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -46,6 +64,31 @@ export const AdmissionsLeads: React.FC = () => {
       if (stageFilter) params.append('stage', stageFilter);
       if (categoryFilter) params.append('scoreCategory', categoryFilter);
       return fetchApi(`/api/leads?${params.toString()}`);
+    },
+    retry: 2,
+  });
+
+  // Add Lead Mutation
+  const addLeadMutation = useMutation({
+    mutationFn: (leadData: any) =>
+      fetchApi('/api/leads', {
+        method: 'POST',
+        body: JSON.stringify(leadData),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['admissions-analytics'] });
+      setIsAddLeadOpen(false);
+      setAddLeadError(null);
+      setNewLead({
+        studentName: '',
+        email: '',
+        phone: '',
+        courseInterest: 'JEE Advanced FastTrack',
+      });
+    },
+    onError: (err: any) => {
+      setAddLeadError(err.message || 'Failed to submit new lead');
     },
   });
 
@@ -94,28 +137,66 @@ export const AdmissionsLeads: React.FC = () => {
           </p>
         </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <div className="flex items-center space-x-3">
           <button
-            onClick={() => setViewMode('table')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition ${
-              viewMode === 'table' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={() => refetch()}
+            className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition shadow-sm"
+            title="Refresh Leads"
           >
-            <TableIcon className="w-3.5 h-3.5" />
-            <span>Table View</span>
+            <RefreshCw className="w-4 h-4" />
           </button>
+
+          {/* View Toggle */}
+          <div className="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition ${
+                viewMode === 'table' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Table View</span>
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition ${
+                viewMode === 'kanban' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Kanban className="w-3.5 h-3.5" />
+              <span>Pipeline Kanban</span>
+            </button>
+          </div>
+
           <button
-            onClick={() => setViewMode('kanban')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition ${
-              viewMode === 'kanban' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={() => setIsAddLeadOpen(true)}
+            className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-xl flex items-center space-x-1.5 shadow"
           >
-            <Kanban className="w-3.5 h-3.5" />
-            <span>Pipeline Kanban</span>
+            <Plus className="w-4 h-4" />
+            <span>Add Lead</span>
           </button>
         </div>
       </div>
+
+      {/* Error State Banner */}
+      {isError && (
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-rose-200">Unable to load leads from database</p>
+              <p className="text-[11px] text-rose-300/80">{(error as any)?.message || 'Network or server error'}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center space-x-1.5 shadow"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="glass-panel p-4 rounded-xl border border-slate-800 flex flex-wrap items-center gap-3">
@@ -175,14 +256,47 @@ export const AdmissionsLeads: React.FC = () => {
               <tbody className="divide-y divide-slate-800/60">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
-                      Loading leads...
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
+                        <span className="text-xs">Loading admissions leads intelligence...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : isError ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-3">
+                        <AlertCircle className="w-8 h-8 text-rose-400" />
+                        <div className="text-sm font-semibold text-rose-200">Failed to load leads</div>
+                        <p className="text-xs text-slate-400 max-w-md">
+                          {(error as any)?.message || 'Server connection or network error'}
+                        </p>
+                        <button
+                          onClick={() => refetch()}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium rounded-lg flex items-center space-x-2 border border-slate-700 transition"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Retry Loading Leads</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ) : leads.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
-                      No matching leads found.
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center space-y-3">
+                        <User className="w-8 h-8 text-slate-600" />
+                        <div className="text-sm font-semibold text-slate-300">No leads found. Add your first lead.</div>
+                        <p className="text-xs text-slate-500">Capture inquiries from the public portal or create an internal lead entry.</p>
+                        <button
+                          onClick={() => setIsAddLeadOpen(true)}
+                          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium rounded-lg flex items-center space-x-1.5 transition shadow"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add New Lead</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -449,6 +563,120 @@ export const AdmissionsLeads: React.FC = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Add Lead Modal */}
+      {isAddLeadOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div>
+                <h3 className="text-base font-bold text-white">Add New Admissions Lead</h3>
+                <p className="text-xs text-slate-400">Capture lead with deterministic scoring</p>
+              </div>
+              <button
+                onClick={() => setIsAddLeadOpen(false)}
+                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {addLeadError && (
+              <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{addLeadError}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newLead.studentName.trim() || !newLead.email.trim() || !newLead.phone.trim()) {
+                  setAddLeadError('Please fill in student name, email, and phone number.');
+                  return;
+                }
+                addLeadMutation.mutate(newLead);
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Student Name <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Sharma"
+                  value={newLead.studentName}
+                  onChange={(e) => setNewLead({ ...newLead, studentName: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Email Address <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="e.g. rahul@example.com"
+                  value={newLead.email}
+                  onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Phone Number <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="e.g. +91 9876543210"
+                  value={newLead.phone}
+                  onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Course Interest
+                </label>
+                <select
+                  value={newLead.courseInterest}
+                  onChange={(e) => setNewLead({ ...newLead, courseInterest: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="JEE Advanced FastTrack">JEE Advanced FastTrack</option>
+                  <option value="NEET Medical Excellence">NEET Medical Excellence</option>
+                  <option value="Foundation Class 10th">Foundation Class 10th</option>
+                  <option value="CUET Crash Course">CUET Crash Course</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddLeadOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addLeadMutation.isPending}
+                  className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow"
+                >
+                  {addLeadMutation.isPending ? 'Submitting...' : 'Submit Lead'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

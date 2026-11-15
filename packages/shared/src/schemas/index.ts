@@ -154,3 +154,25 @@ export const n8nWebhookGeneralSchema = z.object({
   data: z.any().optional(),
   executionId: z.string().optional(),
 });
+
+// Staff Management Schemas
+export const createStaffSchema = z.object({
+  staffId: z.string().trim().min(2, 'Staff ID must have at least 2 characters'),
+  fullName: z.string().trim().min(2, 'Full name must have at least 2 characters'),
+  email: z.string().trim().email('Invalid email address').optional().nullable(),
+  phone: z.string().trim().min(7, 'Phone must be at least 7 digits').optional().nullable(),
+  designation: z.string().trim().optional().nullable(),
+  department: z.string().trim().optional().nullable(),
+  joiningDate: z.string().optional().nullable(),
+  employmentStatus: z.enum(['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'TERMINATED']).default('ACTIVE'),
+});
+
+export const updateStaffSchema = z.object({
+  fullName: z.string().trim().min(2, 'Full name must have at least 2 characters').optional(),
+  email: z.string().trim().email('Invalid email address').optional().nullable(),
+  phone: z.string().trim().min(7, 'Phone must be at least 7 digits').optional().nullable(),
+  designation: z.string().trim().optional().nullable(),
+  department: z.string().trim().optional().nullable(),
+  joiningDate: z.string().optional().nullable(),
+  employmentStatus: z.enum(['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'TERMINATED']).optional(),
+});

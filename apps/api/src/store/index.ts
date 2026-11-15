@@ -5,6 +5,7 @@ import {
   SEED_CLASSES,
   SEED_STUDENTS,
   SEED_LEADS,
+  SEED_STAFF,
   SEED_SYSTEM_SETTINGS,
 } from './seedData.js';
 import {
@@ -44,6 +45,7 @@ export interface AppState {
   idempotencyRecords: any[];
   systemSettings: typeof SEED_SYSTEM_SETTINGS;
   automationRuns: any[];
+  staff: any[];
 }
 
 export function createInitialState(): AppState {
@@ -302,6 +304,7 @@ export function createInitialState(): AppState {
     idempotencyRecords: [],
     systemSettings: { ...SEED_SYSTEM_SETTINGS },
     automationRuns: [],
+    staff: [...SEED_STAFF],
   };
 }
 
@@ -310,6 +313,14 @@ class Store {
 
   public getState(): AppState {
     return this.state;
+  }
+
+  public get staff(): any[] {
+    return this.state.staff;
+  }
+
+  public set staff(val: any[]) {
+    this.state.staff = val;
   }
 
   public reset(isProductionCheck = false) {

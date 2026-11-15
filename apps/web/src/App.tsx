@@ -6,6 +6,7 @@ import { AppLayout } from './components/layout/AppLayout.js';
 
 import { OverviewDashboard } from './pages/OverviewDashboard.js';
 import { AdmissionsLeads } from './pages/AdmissionsLeads.js';
+import { StaffManagement } from './pages/StaffManagement.js';
 import { Counsellors } from './pages/Counsellors.js';
 import { FollowUpTasks } from './pages/FollowUpTasks.js';
 import { StudentsDirectory } from './pages/StudentsDirectory.js';
@@ -64,6 +65,7 @@ export const App: React.FC = () => {
               }
             >
               <Route index element={<OverviewDashboard />} />
+              <Route path="staff" element={<StaffManagement />} />
               <Route path="leads" element={<AdmissionsLeads />} />
               <Route path="counsellors" element={<Counsellors />} />
               <Route path="follow-ups" element={<FollowUpTasks />} />

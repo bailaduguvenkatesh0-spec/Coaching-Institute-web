@@ -250,3 +250,21 @@ export interface SystemSettingsConfig {
   consecutiveAbsenceLimit: number;
   missingAssignmentsLimit: number;
 }
+
+// Staff Management Types
+export type EmploymentStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' | 'TERMINATED';
+
+export interface StaffItem {
+  id: string;
+  staffId: string;
+  fullName: string;
+  email?: string | null;
+  phone?: string | null;
+  designation?: string | null;
+  department?: string | null;
+  joiningDate?: string | null;
+  employmentStatus: EmploymentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
