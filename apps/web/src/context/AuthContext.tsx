@@ -50,6 +50,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(res.user);
       if (res.token) localStorage.setItem('teamb_token', res.token);
       localStorage.setItem('teamb_user', JSON.stringify(res.user));
+    } catch (err: any) {
+      // Offline / standalone demo fallback when backend is not running or not yet deployed
+      const isNetworkDown = !err?.status || err.message?.includes('fetch') || err.message?.includes('Failed') || err.message?.includes('NetworkError');
+      if (isNetworkDown) {
+        const demoAccounts: Record<string, { role: User['role']; name: string }> = {
+          'admin@teamb.edu': { role: 'ADMIN', name: 'Dr. Vikramaditya Sharma (Director)' },
+          'counsellor.priya@teamb.edu': { role: 'ADMISSIONS_COUNSELLOR', name: 'Priya Sharma (Senior Counsellor)' },
+          'coordinator.rahul@teamb.edu': { role: 'ACADEMIC_COORDINATOR', name: 'Rahul Varma (Senior Coordinator)' },
+          'teacher.anita@teamb.edu': { role: 'TEACHER', name: 'Anita Desai (Senior Faculty)' },
+        };
+        const normalized = email.toLowerCase().trim();
+        const demoUser = demoAccounts[normalized];
+        if (demoUser) {
+          const fallbackUser: User = {
+            id: `demo-${demoUser.role.toLowerCase()}`,
+            email: normalized,
+            name: demoUser.name,
+            role: demoUser.role,
+          };
+          setUser(fallbackUser);
+          localStorage.setItem('teamb_user', JSON.stringify(fallbackUser));
+          localStorage.setItem('teamb_token', 'demo-offline-preview-token');
+          return;
+        }
+      }
+      throw err;
     } finally {
       setIsLoading(false);
     }

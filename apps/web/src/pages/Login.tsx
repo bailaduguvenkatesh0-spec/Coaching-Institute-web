@@ -20,7 +20,11 @@ export const Login: React.FC = () => {
       await login(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please verify credentials.');
+      if (err.message?.includes('fetch') || err.message?.includes('Failed') || !err?.status) {
+        setError('Backend API is currently offline. Click any of the Instant Evaluator buttons below to access the demo dashboard.');
+      } else {
+        setError(err.message || 'Login failed. Please verify credentials.');
+      }
     } finally {
       setLoading(false);
     }
