@@ -1,0 +1,604 @@
+// TEAM B COACHING INSTITUTE - PRISMA SCHEMA (PostgreSQL 16)
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -----------------------------------------------------------------------------
+// SHARED DOMAIN ENTITIES
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  ADMISSIONS_COUNSELLOR
+  ACADEMIC_COORDINATOR
+  TEACHER
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         UserRole  @default(TEACHER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  counsellorProfile Counsellor?
+  auditLogs         AuditLog[]
+  assignedTasks     InterventionTask[]
+
+  @@map("users")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  userEmail  String?
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model NotificationEvent {
+  id         String   @id @default(uuid())
+  eventType  String
+  recipient  String
+  channel    String
+  payload    Json
+  status     String   @default("PENDING") // PENDING, SENT, FAILED
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@map("notification_events")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  idempotencyKey String   @unique
+  endpoint       String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+
+  @@index([idempotencyKey])
+  @@map("idempotency_records")
+}
+
+model SystemSetting {
+  key         String   @id
+  value       String   // JSON stringified configuration
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+// -----------------------------------------------------------------------------
+// PROJECT 1: ADMISSIONS DOMAIN ENTITIES
+// -----------------------------------------------------------------------------
+
+enum LeadStage {
+  New
+  Contacted
+  Counselling_Booked @map("Counselling Booked")
+  Attended
+  Application_Started @map("Application Started")
+  Enrolled
+  Lost
+  Nurture
+}
+
+enum LeadScoreCategory {
+  HOT
+  WARM
+  COLD
+}
+
+enum LeadSource {
+  WEB_FORM
+  SIMULATED_WHATSAPP
+  INCOMING_CALL
+  REFERRAL
+  CSV_IMPORT
+  EXTERNAL_CAMPAIGN
+}
+
+model Lead {
+  id                       String            @id @default(uuid())
+  studentName              String
+  email                    String
+  phone                    String
+  rawEmail                 String?
+  rawPhone                 String?
+  courseInterest           String
+  preferredStartDate       DateTime?
+  preferredCounsellingTime String?
+  source                   LeadSource        @default(WEB_FORM)
+  stage                    LeadStage         @default(New)
+  score                    Int               @default(0)
+  scoreCategory            LeadScoreCategory @default(COLD)
+  scoreDetails             Json?
+  assignedCounsellorId     String?
+  freeTextInterests        String?
+  aiSummary                String?
+  communicationConsent     Boolean           @default(false)
+  optedOut                 Boolean           @default(false)
+  lossReason               String?
+  lastContactedAt          DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  assignedCounsellor Counsellor?         @relation(fields: [assignedCounsellorId], references: [id], onDelete: SetNull)
+  scoreHistory       LeadScoreHistory[]
+  stageHistory       LeadStageHistory[]
+  assignments        LeadAssignment[]
+  followUpTasks      FollowUpTask[]
+  communicationLogs  CommunicationLog[]
+  mergeReviews       LeadMergeReview[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([stage])
+  @@index([scoreCategory])
+  @@map("leads")
+}
+
+model LeadSourceRecord {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("lead_sources")
+}
+
+model LeadScoreHistory {
+  id           String            @id @default(uuid())
+  leadId       String
+  total        Int
+  category     LeadScoreCategory
+  factors      Json
+  reasons      Json
+  calculatedAt DateTime          @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_score_history")
+}
+
+model Counsellor {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  name              String
+  email             String   @unique
+  workingHoursStart String   @default("09:00")
+  workingHoursEnd   String   @default("18:00")
+  isAvailable       Boolean  @default(true)
+  maxWorkload       Int      @default(25)
+  currentWorkload   Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courses       CounsellorCourse[]
+  leads         Lead[]
+  assignments   LeadAssignment[]
+  followUpTasks FollowUpTask[]
+
+  @@map("counsellors")
+}
+
+model CounsellorCourse {
+  id           String @id @default(uuid())
+  counsellorId String
+  courseName   String
+
+  counsellor Counsellor @relation(fields: [counsellorId], references: [id], onDelete: Cascade)
+
+  @@unique([counsellorId, courseName])
+  @@map("counsellor_courses")
+}
+
+model LeadAssignment {
+  id           String   @id @default(uuid())
+  leadId       String
+  counsellorId String
+  assignedBy   String   @default("SYSTEM_ROUTING")
+  reason       String
+  createdAt    DateTime @default(now())
+
+  lead       Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  counsellor Counsellor @relation(fields: [counsellorId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([counsellorId])
+  @@map("lead_assignments")
+}
+
+model LeadStageHistory {
+  id        String    @id @default(uuid())
+  leadId    String
+  fromStage LeadStage
+  toStage   LeadStage
+  changedBy String    @default("SYSTEM")
+  note      String?
+  createdAt DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_stage_history")
+}
+
+model FollowUpTask {
+  id            String    @id @default(uuid())
+  leadId        String
+  counsellorId  String
+  attemptNumber Int       @default(1)
+  dueAt         DateTime
+  scheduledAt   DateTime  @default(now())
+  status        String    @default("OPEN") // OPEN, COMPLETED, CANCELLED
+  notes         String?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  lead       Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  counsellor Counsellor @relation(fields: [counsellorId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([counsellorId])
+  @@index([status, dueAt])
+  @@map("follow_up_tasks")
+}
+
+model CommunicationConsent {
+  id           String    @id @default(uuid())
+  leadId       String?
+  studentId    String?
+  guardianId   String?
+  channel      String    @default("ALL") // SMS, WHATSAPP, EMAIL, ALL
+  consentGiven Boolean   @default(false)
+  optedOutAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("communication_consents")
+}
+
+model CommunicationLog {
+  id          String   @id @default(uuid())
+  leadId      String?
+  studentId   String?
+  channel     String   // SMS, WHATSAPP, EMAIL
+  recipient   String
+  direction   String   @default("OUTBOUND") // INBOUND, OUTBOUND
+  content     String
+  status      String   @default("SENT")     // SENT, FAILED, SIMULATED
+  isSimulated Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@map("communication_logs")
+}
+
+model LeadMergeReview {
+  id             String    @id @default(uuid())
+  existingLeadId String
+  incomingData   Json
+  matchType      String    // PHONE_MATCH, EMAIL_MATCH, AMBIGUOUS
+  status         String    @default("PENDING") // PENDING, MERGED, DISMISSED
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  existingLead Lead @relation(fields: [existingLeadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_merge_reviews")
+}
+
+// -----------------------------------------------------------------------------
+// PROJECT 2: ACADEMIC DOMAIN ENTITIES
+// -----------------------------------------------------------------------------
+
+model Student {
+  id               String   @id @default(uuid())
+  studentIdNumber  String   @unique
+  name             String
+  email            String   @unique
+  phone            String?
+  enrollmentStatus String   @default("ACTIVE") // ACTIVE, SUSPENDED, GRADUATED
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  enrolments        Enrolment[]
+  guardians         Guardian[]
+  attendanceRecords AttendanceRecord[]
+  assessmentRecords AssessmentRecord[]
+  assignmentRecords AssignmentRecord[]
+  engagementFlags   EngagementFlag[]
+  interventionTasks InterventionTask[]
+  weeklySummaries   WeeklySummary[]
+  messageApprovals  MessageApproval[]
+
+  @@index([studentIdNumber])
+  @@map("students")
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  courseCode  String   @unique
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+
+  classes Class[]
+
+  @@map("courses")
+}
+
+model Class {
+  id        String   @id @default(uuid())
+  classCode String   @unique
+  name      String
+  courseId  String
+  teacherId String?
+  schedule  String?
+  createdAt DateTime @default(now())
+
+  course            Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  enrolments        Enrolment[]
+  attendanceRecords AttendanceRecord[]
+  assignmentRecords AssignmentRecord[]
+
+  @@map("classes")
+}
+
+model Enrolment {
+  id        String   @id @default(uuid())
+  studentId String
+  classId   String
+  status    String   @default("ACTIVE")
+  enrolledAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classId])
+  @@map("enrolments")
+}
+
+model Guardian {
+  id           String   @id @default(uuid())
+  studentId    String
+  name         String
+  relationship String   @default("PARENT") // FATHER, MOTHER, GUARDIAN
+  email        String
+  phone        String
+  createdAt    DateTime @default(now())
+
+  student          Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  preference       GuardianPreference?
+  messageApprovals MessageApproval[]
+
+  @@map("guardians")
+}
+
+model GuardianPreference {
+  id               String   @id @default(uuid())
+  guardianId       String   @unique
+  preferredChannel String   @default("WHATSAPP") // SMS, WHATSAPP, EMAIL
+  consentGiven     Boolean  @default(true)
+  quietHoursStart  String   @default("21:00")
+  quietHoursEnd    String   @default("08:00")
+  updatedAt        DateTime @updatedAt
+
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+
+  @@map("guardian_preferences")
+}
+
+model AttendanceRecord {
+  id        String   @id @default(uuid())
+  studentId String
+  classId   String
+  date      DateTime
+  status    String   // PRESENT, ABSENT, EXCUSED, LATE
+  remarks   String?
+  batchId   String?
+  createdAt DateTime @default(now())
+
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  batch   ImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, classId, date])
+  @@index([studentId, date])
+  @@map("attendance_records")
+}
+
+model AssessmentRecord {
+  id              String   @id @default(uuid())
+  studentId       String
+  subjectCode     String
+  assessmentDate  DateTime
+  assessmentTitle String
+  assessmentType  String   @default("QUIZ")
+  scoreObtained   Float
+  maxScore        Float
+  percentage      Float
+  batchId         String?
+  createdAt       DateTime @default(now())
+
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch   ImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, assessmentDate])
+  @@map("assessment_records")
+}
+
+model AssignmentRecord {
+  id            String    @id @default(uuid())
+  studentId     String
+  classId       String
+  title         String
+  dueDate       DateTime
+  submittedDate DateTime?
+  status        String    @default("COMPLETED") // COMPLETED, MISSING, LATE
+  createdAt     DateTime  @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, status])
+  @@map("assignment_records")
+}
+
+model ImportBatch {
+  id            String   @id @default(uuid())
+  type          String   // ATTENDANCE, ASSESSMENT
+  fileName      String
+  totalRows     Int      @default(0)
+  validRows     Int      @default(0)
+  rejectedRows  Int      @default(0)
+  duplicateRows Int      @default(0)
+  status        String   @default("PENDING") // PENDING, COMPLETED, FAILED
+  createdAt     DateTime @default(now())
+
+  errors            ImportError[]
+  attendanceRecords AttendanceRecord[]
+  assessmentRecords AssessmentRecord[]
+
+  @@map("import_batches")
+}
+
+model ImportError {
+  id           String   @id @default(uuid())
+  batchId      String
+  rowNumber    Int
+  rawData      Json
+  errorMessage String
+  createdAt    DateTime @default(now())
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@map("import_errors")
+}
+
+model EngagementFlag {
+  id                     String    @id @default(uuid())
+  studentId              String
+  rule                   String    // CONSECUTIVE_ABSENCES, LOW_ATTENDANCE_WINDOW, etc.
+  severity               String    // LOW, MEDIUM, HIGH, CRITICAL
+  evidence               String
+  observationWindowStart DateTime
+  observationWindowEnd   DateTime
+  suggestedAction        String
+  status                 String    @default("ACTIVE") // ACTIVE, RESOLVED, DISMISSED
+  dismissalReason        String?
+  resolutionNotes        String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  student Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tasks   InterventionTask[]
+
+  @@unique([studentId, rule, observationWindowStart, observationWindowEnd])
+  @@index([studentId, status])
+  @@map("engagement_flags")
+}
+
+model InterventionTask {
+  id                String    @id @default(uuid())
+  studentId         String
+  flagId            String?
+  coordinatorId     String
+  severity          String    // LOW, MEDIUM, HIGH, CRITICAL
+  evidence          String
+  recommendedAction String
+  dueDate           DateTime
+  status            String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, DISMISSED
+  notes             String?
+  resolutionReason  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  student     Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  flag        EngagementFlag? @relation(fields: [flagId], references: [id], onDelete: SetNull)
+  coordinator User            @relation(fields: [coordinatorId], references: [id], onDelete: Cascade)
+
+  @@index([coordinatorId, status])
+  @@index([studentId])
+  @@map("intervention_tasks")
+}
+
+model WeeklySummary {
+  id                        String   @id @default(uuid())
+  studentId                 String
+  isoWeek                   String   // e.g., '2026-W44'
+  attendancePercentage      Float
+  classesAttended           Int
+  classesMissed             Int
+  classesExcused            Int
+  assignmentCompletionRate  Float
+  assessmentTrend           String
+  improvementAreas          Json     // string[]
+  outstandingInterventions  Json     // string[]
+  nextSteps                 String
+  aiEnhanced                Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+
+  student          Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  messageApprovals MessageApproval[]
+
+  @@unique([studentId, isoWeek])
+  @@index([studentId])
+  @@map("weekly_summaries")
+}
+
+model MessageApproval {
+  id                   String    @id @default(uuid())
+  studentId            String
+  guardianId           String
+  summaryId            String?
+  channel              String    @default("WHATSAPP")
+  draftContent         String
+  status               String    @default("PENDING_APPROVAL") // DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SENT, FAILED
+  approverId           String?
+  approvedAt           DateTime?
+  deliveryStatus       String    @default("SIMULATED")        // SIMULATED, QUEUED, DELIVERED, FAILED
+  deliveryAttemptCount Int       @default(0)
+  deliveryError        String?
+  isSimulated          Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian Guardian      @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  summary  WeeklySummary? @relation(fields: [summaryId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([studentId])
+  @@map("message_approvals")
+}

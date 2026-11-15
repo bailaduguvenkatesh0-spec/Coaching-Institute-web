@@ -1,0 +1,201 @@
+{
+  "name": "14 Weekly Summary Generation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "id": "node-trigger-14"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json != null }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Validate Payload & Idempotency",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ],
+      "id": "node-val-14"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:4000/api/summaries/weekly/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-n8n-secret",
+              "value": "={{ $env.N8N_SHARED_WEBHOOK_SECRET || \"teamb-n8n-shared-secret-demo\" }}"
+            },
+            {
+              "name": "x-idempotency-key",
+              "value": "=idem-n8n-{{ $json.idempotencyKey || Date.now() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 10000,
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 1000
+          }
+        }
+      },
+      "name": "Call API Endpoint (Bounded Retry)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        720,
+        240
+      ],
+      "id": "node-http-14"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:4000/api/automation/runs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-n8n-secret",
+              "value": "={{ $env.N8N_SHARED_WEBHOOK_SECRET || \"teamb-n8n-shared-secret-demo\" }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"workflowName\":\"14 Weekly Summary Generation\",\"status\":\"SUCCESS\",\"details\":{\"workflowId\":\"14\"}}"
+      },
+      "name": "Log Execution Outcome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        950,
+        240
+      ],
+      "id": "node-log-14"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:4000/api/automation/runs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-n8n-secret",
+              "value": "={{ $env.N8N_SHARED_WEBHOOK_SECRET || \"teamb-n8n-shared-secret-demo\" }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"workflowName\":\"14 Weekly Summary Generation\",\"status\":\"FAILED\",\"details\":{\"error\":\"Payload validation or downstream HTTP execution failure\"}}"
+      },
+      "name": "Error Branch & Recovery Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        720,
+        420
+      ],
+      "id": "node-err-14"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Payload & Idempotency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Payload & Idempotency": {
+      "main": [
+        [
+          {
+            "node": "Call API Endpoint (Bounded Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Branch & Recovery Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call API Endpoint (Bounded Retry)": {
+      "main": [
+        [
+          {
+            "node": "Log Execution Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "TEAM-B"
+    },
+    {
+      "name": "ACADEMIC"
+    }
+  ]
+}

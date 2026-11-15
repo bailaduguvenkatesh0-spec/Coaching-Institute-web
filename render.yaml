@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: teamb-coaching-platform
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: starter # Starter plan ($7/month) gives 24/7 continuous uptime without sleeping
+    region: singapore # Closest region to Asia/Kolkata
+    branch: main
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: APP_TIMEZONE
+        value: Asia/Kolkata
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: teamb-postgres
+          property: connectionString
+
+databases:
+  - name: teamb-postgres
+    plan: starter # Starter plan ($7/month) provides persistent PostgreSQL with automated daily backups
+    region: singapore
+    databaseName: teamb_db
+    user: postgres

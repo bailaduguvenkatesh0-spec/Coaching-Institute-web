@@ -1,0 +1,36 @@
+{
+  "name": "team-b-coaching-institute",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TEAM B Coaching Institute AI Automation Platform - Admissions Intelligence & Student Attendance Engagement",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run --workspace=@team-b/shared build && npm run --workspace=@team-b/api build && npm run --workspace=@team-b/web build",
+    "lint": "npm run --workspaces --if-present lint",
+    "test": "npm run --workspaces --if-present test && npm run test:workflows",
+    "test:workflows": "vitest run n8n/validateWorkflows.test.ts",
+    "dev:api": "npm run --workspace=@team-b/api dev",
+    "dev:web": "npm run --workspace=@team-b/web dev",
+    "dev": "node scripts/dev.mjs",
+    "start": "node apps/api/dist/server.js",
+    "db:migrate": "npm run --workspace=@team-b/api db:migrate",
+    "db:generate": "npm run --workspace=@team-b/api db:generate",
+    "db:seed": "npm run --workspace=@team-b/api db:seed",
+    "db:reset": "npm run --workspace=@team-b/api db:reset"
+  },
+  "keywords": [
+    "coaching-institute",
+    "admissions-intelligence",
+    "student-engagement",
+    "ai-automation",
+    "n8n"
+  ],
+  "author": "Antigravity Senior Full-Stack Engineer",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
+}

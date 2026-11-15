@@ -1,0 +1,6 @@
+studentIdNumber,subjectCode,assessmentDate,assessmentTitle,assessmentType,scoreObtained,maxScore
+TB-2026-001,PHY-101,2026-10-20,Rotational Mechanics Midterm,MIDTERM,92,100
+TB-2026-002,BIO-101,2026-10-20,Human Physiology Quiz,QUIZ,88,100
+TB-2026-003,MTH-101,2026-10-20,Integral Calculus Benchmark,FINAL,45,100
+TB-2026-004,CHE-101,2026-10-20,Organic Chemistry Test 3,QUIZ,55,100
+TB-2026-005,MAT-101,2026-10-20,Geometry Foundation Quiz,QUIZ,78,100

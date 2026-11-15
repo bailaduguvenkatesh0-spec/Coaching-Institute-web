@@ -1,0 +1,6 @@
+studentIdNumber,classCode,date,status,remarks
+TB-2026-001,BATCH-JEE-A,2026-10-25,PRESENT,On time
+TB-2026-002,BATCH-NEET-B,2026-10-25,PRESENT,On time
+TB-2026-003,BATCH-JEE-A,2026-10-25,ABSENT,Consecutive absence trigger test
+TB-2026-004,BATCH-NEET-B,2026-10-25,EXCUSED,Medical leave slip submitted
+TB-2026-005,BATCH-FND-C,2026-10-25,LATE,Late arrival 15 mins

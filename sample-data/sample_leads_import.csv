@@ -1,0 +1,4 @@
+studentName,email,phone,courseInterest,preferredStartDate,preferredCounsellingTime,source,freeTextInterests,communicationConsent
+Saanvi Roy,saanvi.roy@example.com,9820011221,NEET Comprehensive,2026-11-15,10:00 AM - 12:00 PM,CSV_IMPORT,Looking for intensive botany test series,true
+Devansh Nair,devansh.n@example.com,9820011222,JEE Advanced FastTrack,2026-11-10,02:00 PM - 04:00 PM,CSV_IMPORT,Interested in hostel accommodation and evening doubt clearing,true
+Ishaan Bakshi,ishaan.b@example.com,9820011223,Foundation 10th,2026-12-01,05:00 PM - 07:00 PM,CSV_IMPORT,Targeting NTSE stage 2,false

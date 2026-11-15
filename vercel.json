@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run --workspace=@team-b/shared build && npm run --workspace=@team-b/web build",
+  "outputDirectory": "apps/web/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
