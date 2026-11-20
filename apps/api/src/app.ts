@@ -12,6 +12,10 @@ import academicRoutes from './routes/academic.js';
 import automationRoutes from './routes/automation.js';
 import staffRoutes from './routes/staff.js';
 import studentsRoutes from './routes/students.js';
+import coursesRoutes from './routes/courses.js';
+import batchesRoutes from './routes/batches.js';
+import feesRoutes from './routes/fees.js';
+import examsRoutes from './routes/exams.js';
 import { checkDbConnection } from './prisma.js';
 import { config } from './config.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
@@ -281,6 +285,31 @@ export function createApp(): Express {
           'PUT /api/staff/:id',
           'DELETE /api/staff/:id',
         ],
+        courses: [
+          'GET /api/courses',
+          'POST /api/courses',
+          'GET /api/courses/:id',
+        ],
+        batches: [
+          'GET /api/batches',
+          'POST /api/batches',
+          'POST /api/batches/:id/enroll',
+        ],
+        fees: [
+          'GET /api/fees/stats',
+          'GET /api/fees',
+          'POST /api/fees/assign',
+          'POST /api/payments',
+          'GET /api/payments/:id/receipt',
+        ],
+        examinations: [
+          'GET /api/exams',
+          'POST /api/exams',
+          'GET /api/exams/:id',
+          'POST /api/exams/:id/marks',
+          'POST /api/exams/:id/publish',
+          'GET /api/exams/student/:studentId',
+        ],
         automation: [
           'POST /api/webhooks/n8n/lead',
           'POST /api/webhooks/n8n/counsellor-assignment',
@@ -315,6 +344,16 @@ export function createApp(): Express {
 
   // Mount Staff Management routes
   app.use('/api', staffRoutes);
+
+  // Mount Course & Batch Management routes
+  app.use('/api', coursesRoutes);
+  app.use('/api', batchesRoutes);
+
+  // Mount Fee & Payment Management routes
+  app.use('/api', feesRoutes);
+
+  // Mount Examination & Results Management routes
+  app.use('/api', examsRoutes);
 
   // Mount n8n Webhook & Automation routes
   app.use('/api', automationRoutes);

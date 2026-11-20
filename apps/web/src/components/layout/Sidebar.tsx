@@ -16,6 +16,12 @@ import {
   History,
   Settings,
   ExternalLink,
+  BookOpen,
+  Layers,
+  CreditCard,
+  Award,
+  User,
+  HeartHandshake,
 } from 'lucide-react';
 
 interface NavItem {
@@ -28,10 +34,14 @@ interface NavItem {
 
 const navSections: { title: string; items: NavItem[] }[] = [
   {
-    title: 'GENERAL',
+    title: 'EXECUTIVE & GENERAL',
     items: [
-      { name: 'Overview Dashboard', to: '/', icon: LayoutDashboard },
-      { name: 'Staff Management', to: '/staff', icon: Users, badge: '5' },
+      { name: 'Command Center', to: '/', icon: LayoutDashboard },
+      { name: 'Staff Management', to: '/staff', icon: Users, badge: '5 Staff' },
+      { name: 'Courses Curriculum', to: '/courses', icon: BookOpen },
+      { name: 'Academic Batches', to: '/batches', icon: Layers },
+      { name: 'Fee & Payments', to: '/fees', icon: CreditCard, badge: '₹' },
+      { name: 'Exams & Results', to: '/exams', icon: Award },
     ],
   },
   {
@@ -46,11 +56,18 @@ const navSections: { title: string; items: NavItem[] }[] = [
   {
     title: 'PROJECT 2: ACADEMIC & ENGAGEMENT',
     items: [
-      { name: 'Students Management', to: '/students', icon: GraduationCap },
+      { name: 'Students (100 Enrolled)', to: '/students', icon: GraduationCap, badge: '100' },
       { name: 'Attendance CSV Import', to: '/import-attendance', icon: UploadCloud },
       { name: 'At-Risk Rule Flags', to: '/at-risk', icon: AlertTriangle, badge: 'Rules' },
       { name: 'Coordinator Tasks', to: '/coordinator-tasks', icon: ClipboardList },
       { name: 'Parent Outreach Queue', to: '/parent-messages', icon: MessageSquareShare, badge: 'Gated' },
+    ],
+  },
+  {
+    title: 'PORTALS & TRANSPARENCY',
+    items: [
+      { name: 'Student Portal', to: '/student-portal', icon: User },
+      { name: 'Parent Portal', to: '/parent-portal', icon: HeartHandshake },
     ],
   },
   {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchApi } from '../lib/api.js';
+import { fetchApi, getApiBaseUrl, setApiBaseUrl, checkBackendHealth, DEFAULT_PRODUCTION_BACKEND, isBackendUnreachable } from '../lib/api.js';
 import { Badge } from '../components/common/Badge.js';
 import {
   Search,
@@ -44,6 +44,8 @@ export const AdmissionsLeads: React.FC = () => {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
   const [addLeadError, setAddLeadError] = useState<string | null>(null);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionFeedback, setConnectionFeedback] = useState<string | null>(null);
   const [newLead, setNewLead] = useState({
     studentName: '',
     email: '',
@@ -198,17 +200,54 @@ export const AdmissionsLeads: React.FC = () => {
         </div>
       </div>
 
-      {/* Error State Banner */}
-      {isError && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+      {/* Backend Connection / Offline Mode Banner */}
+      {(isError || isBackendUnreachable()) && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-rose-200">Unable to load leads from database</p>
-              <p className="text-[11px] text-rose-300/80">{(error as any)?.message || 'Network or server error'}</p>
+              <p className="text-xs font-semibold text-amber-200">
+                {isError ? 'Unable to reach backend database' : 'Offline / In-Memory Demo Mode Active'}
+              </p>
+              <p className="text-[11px] text-amber-300/80 mt-0.5">
+                Current API Base: <code className="bg-black/30 px-1 py-0.5 rounded text-cyan-300">{getApiBaseUrl() || 'Relative / Same-Origin'}</code>
+                {' — '}Render backend service may be spinning up or sleeping.
+              </p>
+              {connectionFeedback && (
+                <p className="text-[11px] text-cyan-300 font-mono mt-1">{connectionFeedback}</p>
+              )}
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              disabled={testingConnection}
+              onClick={async () => {
+                setTestingConnection(true);
+                setConnectionFeedback('Pinging /api/health...');
+                const res = await checkBackendHealth();
+                setTestingConnection(false);
+                if (res.ok) {
+                  setConnectionFeedback(`✓ Connected! Status: ${res.status}`);
+                  refetch();
+                } else {
+                  setConnectionFeedback(`✗ Could not reach ${res.url}: ${res.error}`);
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 border border-slate-700"
+            >
+              {testingConnection ? <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" /> : <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />}
+              <span>Test Connection</span>
+            </button>
+            <button
+              onClick={() => {
+                setApiBaseUrl(DEFAULT_PRODUCTION_BACKEND);
+                setConnectionFeedback(`API URL set to: ${DEFAULT_PRODUCTION_BACKEND}`);
+                window.location.reload();
+              }}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow"
+            >
+              Use Render Backend
+            </button>
             <button
               onClick={() => {
                 const current = localStorage.getItem('teamb_api_url') || '';
@@ -218,16 +257,16 @@ export const AdmissionsLeads: React.FC = () => {
                 );
                 if (newUrl !== null) {
                   if (newUrl.trim()) {
-                    localStorage.setItem('teamb_api_url', newUrl.trim());
+                    setApiBaseUrl(newUrl.trim());
                   } else {
                     localStorage.removeItem('teamb_api_url');
                   }
                   window.location.reload();
                 }
               }}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
             >
-              Set API URL
+              Custom URL
             </button>
             <button
               onClick={() => refetch()}

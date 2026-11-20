@@ -20,7 +20,7 @@ services:
       - key: COOKIE_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://coaching-institute-web.vercel.app,http://localhost:5173
+        value: https://coaching-institute-web-three.vercel.app,https://coaching-institute-web.vercel.app,http://localhost:5173
       - key: DATABASE_URL
         fromDatabase:
           name: teamb-postgres

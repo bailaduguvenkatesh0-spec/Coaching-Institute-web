@@ -5,6 +5,8 @@
 
 import { DEMO_DATA } from './demoData.js';
 
+export const DEFAULT_PRODUCTION_BACKEND = 'https://teamb-coaching-platform.onrender.com';
+
 // Track whether the backend is reachable so we can warn the user once
 let backendUnreachable = false;
 export function isBackendUnreachable() {
@@ -13,21 +15,56 @@ export function isBackendUnreachable() {
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    const custom = localStorage.getItem('teamb_api_url');
-    if (custom !== null) return custom;
+    let custom = localStorage.getItem('teamb_api_url');
+    if (custom !== null) {
+      custom = custom.trim().replace(/\/+$/, '');
+      // Auto-heal legacy or invalid Render subdomain
+      if (custom.includes('teamb-backend.onrender.com')) {
+        custom = DEFAULT_PRODUCTION_BACKEND;
+        localStorage.setItem('teamb_api_url', custom);
+      }
+      return custom;
+    }
   }
-  return ((import.meta.env.VITE_API_URL as string) || '').trim().replace(/\/+$/, '');
+
+  let envUrl = ((import.meta.env.VITE_API_URL as string) || '').trim().replace(/\/+$/, '');
+  if (envUrl.includes('teamb-backend.onrender.com')) {
+    envUrl = DEFAULT_PRODUCTION_BACKEND;
+  }
+
+  // If in production browser without explicit VITE_API_URL, default to the deployed Render backend
+  if (!envUrl && typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+    return DEFAULT_PRODUCTION_BACKEND;
+  }
+
+  return envUrl;
 }
 
 export function setApiBaseUrl(url: string) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('teamb_api_url', url.trim().replace(/\/+$/, ''));
+    let sanitized = url.trim().replace(/\/+$/, '');
+    if (sanitized.includes('teamb-backend.onrender.com')) {
+      sanitized = DEFAULT_PRODUCTION_BACKEND;
+    }
+    localStorage.setItem('teamb_api_url', sanitized);
   }
 }
 
 export function resetApiBaseUrl() {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('teamb_api_url');
+  }
+}
+
+export async function checkBackendHealth(targetUrl?: string): Promise<{ ok: boolean; status?: string; url: string; error?: string }> {
+  const base = targetUrl || getApiBaseUrl() || (typeof window !== 'undefined' ? window.location.origin : '');
+  const testUrl = `${base.replace(/\/+$/, '')}/api/health`;
+  try {
+    const res = await fetch(testUrl, { method: 'GET', credentials: 'omit' });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: data.status || `HTTP ${res.status}`, url: testUrl };
+  } catch (err: any) {
+    return { ok: false, url: testUrl, error: err.message || 'Network unreachable' };
   }
 }
 
@@ -46,8 +83,7 @@ export async function fetchApi<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const customApiUrl = typeof window !== 'undefined' ? localStorage.getItem('teamb_api_url') : null;
-  let apiBase = (customApiUrl !== null ? customApiUrl : (import.meta.env.VITE_API_URL as string) || '').trim().replace(/\/+$/, '');
+  let apiBase = getApiBaseUrl();
   let normalizedEndpoint = endpoint;
 
   if (apiBase && apiBase.endsWith('/api') && normalizedEndpoint.startsWith('/api/')) {
@@ -82,7 +118,7 @@ export async function fetchApi<T = any>(
 
     return data;
   } catch (netErr: any) {
-    // ── Network / CORS failure ──────────────────────────────────────────────
+    // Check if network error or connection failure
     const isNetworkError =
       netErr?.name === 'TypeError' ||
       netErr?.message?.toLowerCase().includes('fetch') ||
@@ -94,16 +130,37 @@ export async function fetchApi<T = any>(
     if (isNetworkError) {
       backendUnreachable = true;
 
+      // Failover attempt: if current target was not DEFAULT_PRODUCTION_BACKEND and is remote
+      if (apiBase && !apiBase.includes('localhost') && apiBase !== DEFAULT_PRODUCTION_BACKEND) {
+        try {
+          const failoverEndpoint = `${DEFAULT_PRODUCTION_BACKEND}${normalizedEndpoint.startsWith('/') ? normalizedEndpoint : `/${normalizedEndpoint}`}`;
+          const failoverRes = await fetch(failoverEndpoint, {
+            ...options,
+            headers,
+            credentials: 'include',
+          });
+          if (failoverRes.ok) {
+            const failoverData = await failoverRes.json().catch(() => ({}));
+            // Successfully connected to failover backend - auto update stored URL
+            backendUnreachable = false;
+            setApiBaseUrl(DEFAULT_PRODUCTION_BACKEND);
+            return failoverData as T;
+          }
+        } catch {
+          // Continue to demo fallback
+        }
+      }
+
       // Always try Demo-Data fallback
       const demoResult = getDemoFallback(normalizedEndpoint || endpoint, options);
       if (demoResult !== null) {
         console.warn(
-          `[DEMO MODE] Backend unreachable. Serving in-memory demo data for: ${endpoint}`
+          `[DEMO MODE] Backend unreachable at ${apiEndpoint}. Serving verified in-memory demo data for: ${endpoint}`
         );
         return demoResult as T;
       }
 
-      const destination = apiBase || window.location.origin;
+      const destination = apiBase || (typeof window !== 'undefined' ? window.location.origin : '');
       throw new Error(
         `Unable to reach API server at ${destination}. ` +
           `The backend service may be spinning up (Render free tier sleeps after 15 min inactivity). ` +
@@ -311,6 +368,87 @@ function getDemoFallback(endpoint: string, options: RequestInit = {}): any {
   // Courses
   if (pathname === '/api/courses' || pathname === '/courses') {
     return { success: true, courses: (DEMO_DATA as any).courses || [] };
+  }
+
+  // Batches
+  if (pathname === '/api/batches' || pathname === '/batches') {
+    return { success: true, count: ((DEMO_DATA as any).batches || []).length, batches: (DEMO_DATA as any).batches || [] };
+  }
+
+  // Fees Stats
+  if (pathname === '/api/fees/stats' || pathname === '/fees/stats') {
+    return { success: true, stats: (DEMO_DATA as any).feeStats };
+  }
+
+  // Fees list
+  if (pathname === '/api/fees' || pathname === '/fees') {
+    const fees = (DEMO_DATA as any).students?.map((s: any) => ({
+      id: `fee-${s.id}`,
+      studentId: s.id,
+      student: { id: s.id, studentIdNumber: s.studentIdNumber || s.studentId, name: s.name || s.fullName, email: s.email, phone: s.phone },
+      course: { id: s.courseId || 'course-java-fs', title: s.courseName || 'Java Full Stack', courseCode: 'JAVA-FS' },
+      totalAmount: 45000,
+      paidAmount: s.feeStatus === 'PAID' ? 45000 : s.feeStatus === 'PARTIALLY_PAID' ? 20000 : 0,
+      status: s.feeStatus,
+      dueDate: '2026-12-31',
+      payments: s.feeStatus !== 'PENDING' ? [
+        {
+          id: `pay-${s.id}`,
+          amount: s.feeStatus === 'PAID' ? 45000 : 20000,
+          paymentMode: 'UPI',
+          transactionRef: `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
+          paymentDate: new Date().toISOString(),
+        }
+      ] : []
+    })) || [];
+    return { success: true, count: fees.length, fees };
+  }
+
+  // Payments POST
+  if (pathname === '/api/payments' || pathname === '/payments') {
+    const body = options.body ? JSON.parse(String(options.body)) : {};
+    return {
+      success: true,
+      payment: {
+        id: `pay-${Date.now()}`,
+        feeId: body.feeId,
+        amount: Number(body.amount) || 0,
+        paymentMode: body.paymentMode || 'UPI',
+        transactionRef: body.transactionRef || `UPI-${Date.now().toString().slice(-6)}`,
+        paymentDate: new Date().toISOString(),
+      },
+      message: 'Payment recorded successfully',
+    };
+  }
+
+  // Examinations
+  if (pathname === '/api/exams' || pathname === '/exams') {
+    return { success: true, count: ((DEMO_DATA as any).exams || []).length, exams: (DEMO_DATA as any).exams || [] };
+  }
+
+  if (pathname.match(/^\/api\/exams\/[^/]+$/) || pathname.match(/^\/exams\/[^/]+$/)) {
+    const id = pathname.split('/').pop();
+    const exam = ((DEMO_DATA as any).exams || []).find((e: any) => e.id === id) || (DEMO_DATA as any).exams?.[0];
+    return {
+      success: true,
+      exam: {
+        ...exam,
+        results: (DEMO_DATA.students || []).slice(0, 25).map((s: any, idx: number) => {
+          const marks = 45 + ((idx * 7) % 52);
+          const pct = marks;
+          return {
+            id: `res-${s.id}`,
+            studentId: s.id,
+            student: { id: s.id, studentIdNumber: s.studentIdNumber || s.studentId, name: s.name || s.fullName },
+            marksObtained: marks,
+            percentage: pct,
+            grade: pct >= 90 ? 'A+' : pct >= 80 ? 'A' : pct >= 70 ? 'B' : pct >= 60 ? 'C' : pct >= 40 ? 'D' : 'F',
+            status: pct >= 40 ? 'PASSED' : 'FAILED',
+          };
+        }),
+        analytics: { totalAppeared: 25, passedCount: 23, failedCount: 2, passRate: 92, avgMarks: 74.5 },
+      },
+    };
   }
 
   // Student Stats

@@ -18,6 +18,12 @@ import { ReportsAnalytics } from './pages/ReportsAnalytics.js';
 import { AutomationMonitoring } from './pages/AutomationMonitoring.js';
 import { AuditLogs } from './pages/AuditLogs.js';
 import { Settings } from './pages/Settings.js';
+import { CourseManagement } from './pages/CourseManagement.js';
+import { BatchManagement } from './pages/BatchManagement.js';
+import { FeeManagement } from './pages/FeeManagement.js';
+import { ExaminationsManagement } from './pages/ExaminationsManagement.js';
+import { StudentPortal } from './pages/StudentPortal.js';
+import { ParentPortal } from './pages/ParentPortal.js';
 import { Login } from './pages/Login.js';
 import { PublicEnquiry } from './pages/PublicEnquiry.js';
 
@@ -66,6 +72,12 @@ export const App: React.FC = () => {
             >
               <Route index element={<OverviewDashboard />} />
               <Route path="staff" element={<StaffManagement />} />
+              <Route path="courses" element={<CourseManagement />} />
+              <Route path="batches" element={<BatchManagement />} />
+              <Route path="fees" element={<FeeManagement />} />
+              <Route path="exams" element={<ExaminationsManagement />} />
+              <Route path="student-portal" element={<StudentPortal />} />
+              <Route path="parent-portal" element={<ParentPortal />} />
               <Route path="leads" element={<AdmissionsLeads />} />
               <Route path="counsellors" element={<Counsellors />} />
               <Route path="follow-ups" element={<FollowUpTasks />} />
