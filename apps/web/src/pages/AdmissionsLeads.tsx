@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchApi } from '../lib/api.js';
 import { Badge } from '../components/common/Badge.js';
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   Loader2,
   Plus,
+  GraduationCap,
 } from 'lucide-react';
 
 const STAGES = [
@@ -118,6 +120,24 @@ export const AdmissionsLeads: React.FC = () => {
   const aiDraftMutation = useMutation({
     mutationFn: (id: string) => fetchApi(`/api/leads/${id}/ai-draft`, { method: 'POST' }),
     onSuccess: (data) => setAiDraftResult(data),
+  });
+
+  // Lead-to-Student Conversion Mutation
+  const [conversionMessage, setConversionMessage] = useState<string | null>(null);
+  const convertMutation = useMutation({
+    mutationFn: (id: string) => fetchApi(`/api/leads/${id}/convert`, { method: 'POST' }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead', selectedLeadId] });
+      queryClient.invalidateQueries({ queryKey: ['admissions-analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setConversionMessage(
+        `✓ Converted to Student successfully! Student ID: ${data.student?.studentIdNumber || data.student?.id}`
+      );
+    },
+    onError: (err: any) => {
+      setConversionMessage(`Conversion error: ${err.message || 'Failed to convert lead'}`);
+    },
   });
 
   const leads = data?.leads || [];
@@ -563,6 +583,50 @@ export const AdmissionsLeads: React.FC = () => {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Lead-to-Student Conversion Workflow */}
+                <div className="glass-panel p-4 rounded-xl border border-slate-800 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-semibold text-white flex items-center space-x-1.5">
+                        <GraduationCap className="w-4 h-4 text-emerald-400" />
+                        <span>Student Enrollment Conversion</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {selectedLead.convertedToStudentId
+                          ? `Enrolled as Student (Linked ID: ${selectedLead.convertedToStudentId})`
+                          : 'Converts lead into registered student in PostgreSQL without deleting the lead record.'}
+                      </div>
+                    </div>
+                    {selectedLead.convertedToStudentId ? (
+                      <Link
+                        to="/students"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center space-x-1"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>View in Students Directory</span>
+                      </Link>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Convert candidate "${selectedLead.studentName}" into a registered student?`)) {
+                            convertMutation.mutate(selectedLead.id);
+                          }
+                        }}
+                        disabled={convertMutation.isPending}
+                        className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow transition"
+                      >
+                        <GraduationCap className="w-4 h-4" />
+                        <span>{convertMutation.isPending ? 'Converting...' : 'Convert to Student'}</span>
+                      </button>
+                    )}
+                  </div>
+                  {conversionMessage && (
+                    <div className="p-2.5 rounded bg-emerald-950/40 border border-emerald-800 text-[11px] text-emerald-300">
+                      {conversionMessage}
+                    </div>
+                  )}
                 </div>
 
                 {/* Counsellor & Routing Info */}

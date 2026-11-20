@@ -208,6 +208,45 @@ function getDemoFallback(endpoint: string, options: RequestInit = {}): any {
     return { success: true, lead };
   }
 
+  // Lead Conversion Fallback
+  if (pathname.match(/\/api\/leads\/[^/]+\/convert|\/leads\/[^/]+\/convert/)) {
+    const parts = pathname.split('/');
+    const id = parts[parts.length - 2];
+    const lead = DEMO_DATA.leads.find((l: any) => l.id === id) || DEMO_DATA.leads[0];
+    const count = (DEMO_DATA as any).students?.length || 100;
+    const studentIdNumber = `STU${String(count + 1).padStart(3, '0')}`;
+    const newStudent = {
+      id: `stu-${studentIdNumber.toLowerCase()}`,
+      studentIdNumber,
+      studentId: studentIdNumber,
+      name: lead.studentName,
+      fullName: lead.studentName,
+      email: lead.email,
+      phone: lead.phone,
+      courseId: 'course-java-fs',
+      courseName: lead.courseInterest || 'Java Full Stack',
+      admissionDate: new Date().toISOString(),
+      feeStatus: 'PENDING',
+      studentStatus: 'ACTIVE',
+      enrollmentStatus: 'ACTIVE',
+      convertedFromLeadId: lead.id,
+      isDemoData: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    lead.stage = 'Enrolled';
+    (lead as any).convertedToStudentId = newStudent.id;
+    if ((DEMO_DATA as any).students) {
+      (DEMO_DATA as any).students.unshift(newStudent);
+    }
+    return {
+      success: true,
+      message: 'Lead converted to student record successfully',
+      student: newStudent,
+      lead,
+    };
+  }
+
   // Staff Stats
   if (pathname === '/api/staff/stats' || pathname === '/staff/stats') {
     return { success: true, data: DEMO_DATA.staffStats };

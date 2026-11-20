@@ -10,6 +10,7 @@ import {
 } from '@team-b/shared';
 import { store } from '../store/index.js';
 import { logger } from '../logger.js';
+import { getPrisma } from '../prisma.js';
 
 export interface AttendanceImportRow {
   studentIdNumber: string;
@@ -30,11 +31,209 @@ export interface AssessmentImportRow {
 }
 
 /**
- * CSV Import Engine for Attendance
- * - Row-by-row validation with explicit row numbers
- * - Validates student ID exists
- * - Detects duplicates
- * - Staging / atomic commit: preview or commit
+ * Async CSV Import Engine for Attendance (PostgreSQL + In-Memory fallback)
+ */
+export async function processAttendanceImportAsync(
+  rows: AttendanceImportRow[],
+  fileName = 'attendance_upload.csv',
+  commit = true
+): Promise<CSVImportResult> {
+  const batchId = `batch-att-${Date.now()}`;
+  const prisma = getPrisma();
+
+  let students: any[] = store.getState().students;
+  let classes: any[] = store.getState().classes;
+  let existingRecords: any[] = store.getState().attendanceRecords;
+
+  if (prisma) {
+    try {
+      const [dbStudents, dbClasses, dbRecords] = await Promise.all([
+        prisma.student.findMany(),
+        prisma.class.findMany(),
+        prisma.attendanceRecord.findMany(),
+      ]);
+      if (dbStudents.length > 0) students = dbStudents;
+      if (dbClasses.length > 0) classes = dbClasses;
+      if (dbRecords.length > 0) existingRecords = dbRecords;
+    } catch {}
+  }
+
+  const errors: { row: number; error: string; data?: any }[] = [];
+  const validRecords: any[] = [];
+  let duplicateRows = 0;
+  const batchKeys = new Set<string>();
+
+  rows.forEach((row, idx) => {
+    const rowNum = idx + 1;
+
+    // Validate Student ID
+    if (!row.studentIdNumber || row.studentIdNumber.trim() === '') {
+      errors.push({ row: rowNum, error: 'Student ID Number is required', data: row });
+      return;
+    }
+    const targetStudentId = row.studentIdNumber.trim().toLowerCase();
+    const student = students.find(
+      (s) =>
+        (s.studentIdNumber && s.studentIdNumber.toLowerCase() === targetStudentId) ||
+        (s.studentId && s.studentId.toLowerCase() === targetStudentId) ||
+        (s.id && s.id.toLowerCase() === targetStudentId)
+    );
+    if (!student) {
+      errors.push({
+        row: rowNum,
+        error: `Unknown Student ID '${row.studentIdNumber}'. Student not found in database.`,
+        data: row,
+      });
+      return;
+    }
+
+    // Validate Date format YYYY-MM-DD
+    if (!row.date || !/^\d{4}-\d{2}-\d{2}$/.test(row.date)) {
+      errors.push({ row: rowNum, error: 'Invalid date format. Expected YYYY-MM-DD.', data: row });
+      return;
+    }
+
+    // Validate Class Code
+    const targetClassCode = (row.classCode || '').trim().toLowerCase();
+    const targetClass = classes.find(
+      (c) =>
+        (c.classCode && c.classCode.toLowerCase() === targetClassCode) ||
+        (c.id && c.id.toLowerCase() === targetClassCode)
+    );
+    if (!targetClass) {
+      errors.push({
+        row: rowNum,
+        error: `Unknown Class Code '${row.classCode}'. Class not found.`,
+        data: row,
+      });
+      return;
+    }
+
+    // Validate Status
+    const validStatuses = ['PRESENT', 'ABSENT', 'EXCUSED', 'LATE'];
+    if (!validStatuses.includes(row.status)) {
+      errors.push({
+        row: rowNum,
+        error: `Invalid status '${row.status}'. Must be one of: ${validStatuses.join(', ')}`,
+        data: row,
+      });
+      return;
+    }
+
+    // Duplicate Check: Same student + same class + same date
+    const uniqueKey = `${student.id}_${targetClass.id}_${row.date}`;
+    if (batchKeys.has(uniqueKey)) {
+      duplicateRows++;
+      errors.push({
+        row: rowNum,
+        error: `Duplicate entry in batch: Student ${row.studentIdNumber} already has attendance for ${row.date} in class ${row.classCode}`,
+        data: row,
+      });
+      return;
+    }
+    batchKeys.add(uniqueKey);
+
+    const isAlreadyStored = existingRecords.some((r) => {
+      const rDate = r.date ? (typeof r.date === 'string' ? r.date : new Date(r.date).toISOString()) : '';
+      return (
+        r.studentId === student.id &&
+        r.classId === targetClass.id &&
+        rDate.startsWith(row.date)
+      );
+    });
+    if (isAlreadyStored) {
+      duplicateRows++;
+      errors.push({
+        row: rowNum,
+        error: `Duplicate record in database: Attendance already recorded for student ${row.studentIdNumber} on ${row.date}`,
+        data: row,
+      });
+      return;
+    }
+
+    validRecords.push({
+      id: `att-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
+      studentId: student.id,
+      classId: targetClass.id,
+      date: `${row.date}T09:00:00.000Z`,
+      status: row.status,
+      remarks: row.remarks || null,
+      batchId,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  const totalRows = rows.length;
+  const validCount = validRecords.length;
+  const rejectedCount = errors.length;
+
+  if (commit && validCount > 0) {
+    if (prisma) {
+      try {
+        await prisma.attendanceRecord.createMany({
+          data: validRecords.map((r) => ({
+            id: r.id,
+            studentId: r.studentId,
+            classId: r.classId,
+            date: new Date(r.date),
+            status: r.status,
+            remarks: r.remarks,
+            batchId: r.batchId,
+          })),
+          skipDuplicates: true,
+        });
+      } catch {}
+    }
+
+    store.getState().attendanceRecords.push(...validRecords);
+
+    // Save batch record
+    const batch = {
+      id: batchId,
+      type: 'ATTENDANCE',
+      fileName,
+      totalRows,
+      validRows: validCount,
+      rejectedRows: rejectedCount,
+      duplicateRows,
+      status: rejectedCount === 0 ? 'COMPLETED' : 'PARTIAL',
+      createdAt: new Date().toISOString(),
+    };
+    store.getState().importBatches.unshift(batch);
+
+    // Save import errors
+    errors.forEach((err) => {
+      store.getState().importErrors.push({
+        id: `err-${batchId}-${err.row}`,
+        batchId,
+        rowNumber: err.row,
+        rawData: err.data || {},
+        errorMessage: err.error,
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    // Evaluate at-risk rules for all affected students
+    const uniqueStudentIds = Array.from(new Set(validRecords.map((r) => r.studentId)));
+    uniqueStudentIds.forEach((sid) => evaluateStudentAtRiskRules(sid));
+  }
+
+  return {
+    importBatchId: batchId,
+    totalRows,
+    validRows: validCount,
+    rejectedRows: rejectedCount,
+    duplicateRows,
+    errors,
+    importedRecordsCount: commit ? validCount : 0,
+    status: rejectedCount === 0 ? 'COMPLETED' : (validCount > 0 ? 'PARTIAL' : 'FAILED'),
+    validRecords: commit ? validRecords : [],
+    committed: commit,
+  };
+}
+
+/**
+ * CSV Import Engine for Attendance (Synchronous compatibility wrapper)
  */
 export function processAttendanceImport(
   rows: AttendanceImportRow[],

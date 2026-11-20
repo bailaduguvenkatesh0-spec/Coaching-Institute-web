@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { store } from '../store/index.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimiter.js';
+import { getPrisma } from '../prisma.js';
 
 const router = Router();
 
@@ -23,11 +24,22 @@ router.post('/register', async (req: Request, res: Response) => {
   const { email, password, name, role } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
 
-  const existing = store.getState().users.find(
-    (u) => u.email.toLowerCase() === normalizedEmail
-  );
+  const prisma = getPrisma();
+  let existingUser: any = null;
 
-  if (existing) {
+  if (prisma) {
+    try {
+      existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    } catch {}
+  }
+
+  if (!existingUser) {
+    existingUser = store.getState().users.find(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
+  }
+
+  if (existingUser) {
     return res.status(409).json({
       success: false,
       error: 'User already exists with this email address',
@@ -37,8 +49,26 @@ router.post('/register', async (req: Request, res: Response) => {
   const saltRounds = 10;
   const passwordHash = await bcrypt.hash(password, saltRounds);
 
+  const newId = `u-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  // Create in Prisma if available
+  if (prisma) {
+    try {
+      await prisma.user.create({
+        data: {
+          id: newId,
+          email: normalizedEmail,
+          passwordHash,
+          name,
+          role: role as any,
+          isActive: true,
+        },
+      });
+    } catch {}
+  }
+
   const newUser = {
-    id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: newId,
     email: normalizedEmail,
     passwordHash,
     name,
@@ -48,10 +78,10 @@ router.post('/register', async (req: Request, res: Response) => {
     updatedAt: new Date().toISOString(),
   };
 
-  store.getState().users.push(newUser);
+  store.getState().users.push(newUser as any);
 
   // If registering as a counsellor, automatically provision counsellor profile
-  if (role === 'ADMISSIONS_COUNSELLOR') {
+  if (role === 'ADMISSIONS_COUNSELLOR' || role === 'COUNSELLOR') {
     store.getState().counsellors.push({
       id: `c-${newUser.id}`,
       userId: newUser.id,
@@ -120,11 +150,25 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   const { email, password } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
 
-  const user = store.getState().users.find(
-    (u) => u.email.toLowerCase() === normalizedEmail
-  );
+  const prisma = getPrisma();
+  let user: any = null;
 
-  if (!user || !user.isActive) {
+  if (prisma) {
+    try {
+      user = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+    } catch {}
+  }
+
+  // Fallback to in-memory store
+  if (!user) {
+    user = store.getState().users.find(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
+  }
+
+  if (!user || user.isActive === false) {
     return res.status(401).json({
       success: false,
       error: 'Invalid email or password',

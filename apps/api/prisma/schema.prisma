@@ -14,6 +14,12 @@ generator client {
 
 enum UserRole {
   ADMIN
+  MANAGER
+  COUNSELLOR
+  FACULTY
+  ACCOUNTANT
+  STUDENT
+  PARENT
   ADMISSIONS_COUNSELLOR
   ACADEMIC_COORDINATOR
   TEACHER
@@ -167,6 +173,7 @@ model Lead {
   optedOut                 Boolean           @default(false)
   lossReason               String?
   lastContactedAt          DateTime?
+  convertedToStudentId     String?
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
 
@@ -373,6 +380,7 @@ model Student {
   studentStatus    StudentStatus  @default(ACTIVE)
   enrollmentStatus String         @default("ACTIVE") // ACTIVE, SUSPENDED, GRADUATED
   isDemoData       Boolean        @default(true)
+  convertedFromLeadId String?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
@@ -386,6 +394,9 @@ model Student {
   interventionTasks InterventionTask[]
   weeklySummaries   WeeklySummary[]
   messageApprovals  MessageApproval[]
+  fees              Fee[]
+  payments          Payment[]
+  examResults       ExamResult[]
 
   @@index([studentIdNumber])
   @@index([courseId])
@@ -399,27 +410,38 @@ model Course {
   courseCode  String   @unique
   title       String
   description String?
+  duration    String?
+  fee         Float    @default(0)
+  status      String   @default("ACTIVE")
+  facultyId   String?
   createdAt   DateTime @default(now())
 
-  classes  Class[]
-  students Student[]
+  classes      Class[]
+  students     Student[]
+  fees         Fee[]
+  examinations Examination[]
 
   @@map("courses")
 }
 
 model Class {
-  id        String   @id @default(uuid())
-  classCode String   @unique
-  name      String
-  courseId  String
-  teacherId String?
-  schedule  String?
-  createdAt DateTime @default(now())
+  id          String    @id @default(uuid())
+  classCode   String    @unique
+  name        String
+  courseId    String
+  teacherId   String?
+  schedule    String?
+  startDate   DateTime?
+  endDate     DateTime?
+  maxCapacity Int       @default(40)
+  status      String    @default("ACTIVE")
+  createdAt   DateTime  @default(now())
 
   course            Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
   enrolments        Enrolment[]
   attendanceRecords AttendanceRecord[]
   assignmentRecords AssignmentRecord[]
+  examinations      Examination[]
 
   @@map("classes")
 }
@@ -651,4 +673,92 @@ model MessageApproval {
   @@index([status])
   @@index([studentId])
   @@map("message_approvals")
+}
+
+// -----------------------------------------------------------------------------
+// ENTERPRISE EXTENSIONS: FEES, PAYMENTS, EXAMINATIONS & RESULTS
+// -----------------------------------------------------------------------------
+
+model Fee {
+  id            String    @id @default(uuid())
+  studentId     String
+  courseId      String?
+  totalAmount   Float
+  paidAmount    Float     @default(0)
+  balanceAmount Float     @default(0)
+  dueDate       DateTime?
+  status        FeeStatus @default(PENDING) // PAID, PARTIALLY_PAID, PENDING
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  student  Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course   Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  payments Payment[]
+
+  @@index([studentId])
+  @@index([status])
+  @@map("fees")
+}
+
+model Payment {
+  id                   String   @id @default(uuid())
+  feeId                String
+  studentId            String
+  amount               Float
+  paymentDate          DateTime @default(now())
+  paymentMethod        String   @default("CASH") // CASH, UPI, CARD, NET_BANKING, CHEQUE
+  transactionReference String?
+  receiptNumber        String   @unique
+  remarks              String?
+  createdAt            DateTime @default(now())
+
+  fee     Fee     @relation(fields: [feeId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([feeId])
+  @@index([studentId])
+  @@index([receiptNumber])
+  @@map("payments")
+}
+
+model Examination {
+  id           String   @id @default(uuid())
+  title        String
+  courseId     String?
+  classId      String?
+  examDate     DateTime
+  totalMarks   Float    @default(100)
+  passingMarks Float    @default(40)
+  status       String   @default("SCHEDULED") // SCHEDULED, COMPLETED, PUBLISHED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  course  Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  class   Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  results ExamResult[]
+
+  @@index([courseId])
+  @@index([classId])
+  @@map("examinations")
+}
+
+model ExamResult {
+  id            String   @id @default(uuid())
+  examId        String
+  studentId     String
+  marksObtained Float
+  percentage    Float
+  grade         String   @default("F") // A+, A, B, C, D, F
+  status        String   @default("PASSED") // PASSED, FAILED, ABSENT
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  examination Examination @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@index([examId])
+  @@index([studentId])
+  @@map("exam_results")
 }

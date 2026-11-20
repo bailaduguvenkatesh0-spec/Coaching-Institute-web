@@ -676,10 +676,36 @@ router.post('/follow-ups/:id/complete', authenticate, (req: Request, res: Respon
 });
 
 // GET /api/admissions/analytics
-router.get('/admissions/analytics', authenticate, (req: Request, res: Response) => {
-  const leads = store.getState().leads;
-  const counsellors = store.getState().counsellors;
-  const followUps = store.getState().followUpTasks;
+router.get('/admissions/analytics', authenticate, async (req: Request, res: Response) => {
+  const prisma = getPrisma();
+  let leads: any[] = [];
+  let counsellors: any[] = [];
+  let followUps: any[] = [];
+  let isDb = false;
+
+  if (prisma) {
+    try {
+      const [dbLeads, dbCounsellors, dbTasks] = await Promise.all([
+        prisma.lead.findMany(),
+        prisma.counsellor.findMany(),
+        prisma.followUpTask.findMany(),
+      ]);
+      leads = dbLeads.map((l) => ({
+        ...l,
+        stage: l.stage.replace(/_/g, ' '),
+      }));
+      counsellors = dbCounsellors;
+      followUps = dbTasks;
+      isDb = true;
+    } catch {}
+  }
+
+  // Fallback to store if DB empty or unreachable
+  if (leads.length === 0) {
+    leads = store.getState().leads;
+    counsellors = store.getState().counsellors;
+    followUps = store.getState().followUpTasks;
+  }
 
   const totalEnquiries = leads.length;
   const newUncontacted = leads.filter((l) => l.stage === 'New').length;
@@ -718,18 +744,18 @@ router.get('/admissions/analytics', authenticate, (req: Request, res: Response) 
   }));
 
   // Score distribution
-  const hotLeads = leads.filter((l) => l.scoreCategory === 'HOT').length;
-  const warmLeads = leads.filter((l) => l.scoreCategory === 'WARM').length;
-  const coldLeads = leads.filter((l) => l.scoreCategory === 'COLD').length;
+  const hotLeads = leads.filter((l) => l.scoreCategory === 'HOT' || l.score >= 70).length;
+  const warmLeads = leads.filter((l) => (l.scoreCategory === 'WARM' || (l.score >= 40 && l.score < 70)) && l.scoreCategory !== 'HOT').length;
+  const coldLeads = leads.filter((l) => l.scoreCategory === 'COLD' || l.score < 40).length;
 
   // Counsellor workload
   const counsellorWorkloads = counsellors.map((c) => ({
     id: c.id,
     name: c.name,
-    currentWorkload: c.currentWorkload,
-    maxWorkload: c.maxWorkload,
-    capacityUtilizedPercent: Math.round((c.currentWorkload / c.maxWorkload) * 100),
-    isAvailable: c.isAvailable,
+    currentWorkload: c.currentWorkload || 0,
+    maxWorkload: c.maxWorkload || 25,
+    capacityUtilizedPercent: Math.round(((c.currentWorkload || 0) / (c.maxWorkload || 25)) * 100),
+    isAvailable: c.isAvailable ?? true,
   }));
 
   // SLA Compliance (follow-up tasks completed on or before dueAt)
@@ -747,6 +773,10 @@ router.get('/admissions/analytics', authenticate, (req: Request, res: Response) 
 
   return res.json({
     success: true,
+    storage: {
+      mode: isDb ? 'postgresql-prisma' : 'in-memory-demo',
+      persistent: isDb,
+    },
     metrics: {
       totalEnquiries,
       newUncontacted,
@@ -761,6 +791,138 @@ router.get('/admissions/analytics', authenticate, (req: Request, res: Response) 
       stageDistribution,
       counsellorWorkloads,
     },
+  });
+});
+
+// POST /api/leads/:id/convert (Lead-to-Student Conversion Workflow)
+router.post('/leads/:id/convert', authenticate, requireRole('ADMIN', 'COUNSELLOR', 'ADMISSIONS_COUNSELLOR'), async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { courseId, feeStatus = 'PENDING' } = req.body;
+  const prisma = getPrisma();
+
+  let lead: any = null;
+  if (prisma) {
+    try {
+      lead = await prisma.lead.findUnique({ where: { id } });
+    } catch {}
+  }
+  if (!lead) {
+    lead = store.getState().leads.find((l) => l.id === id);
+  }
+  if (!lead) {
+    return res.status(404).json({ success: false, error: 'Lead not found' });
+  }
+
+  // Check duplicate conversion
+  if (lead.convertedToStudentId) {
+    return res.status(409).json({
+      success: false,
+      error: `Lead has already been converted to student with ID ${lead.convertedToStudentId}`,
+    });
+  }
+
+  // Determine course
+  let targetCourseId = courseId || null;
+  if (prisma && !targetCourseId && lead.courseInterest) {
+    try {
+      const matchedCourse = await prisma.course.findFirst({
+        where: {
+          OR: [
+            { title: { contains: lead.courseInterest, mode: 'insensitive' } },
+            { courseCode: { contains: lead.courseInterest, mode: 'insensitive' } },
+          ],
+        },
+      });
+      if (matchedCourse) targetCourseId = matchedCourse.id;
+    } catch {}
+  }
+
+  // Generate unique student ID number
+  let nextStudentNum = 101;
+  if (prisma) {
+    try {
+      const count = await prisma.student.count();
+      nextStudentNum = count + 1;
+    } catch {}
+  } else {
+    nextStudentNum = store.getState().students.length + 1;
+  }
+  const studentIdNumber = `STU${String(nextStudentNum).padStart(3, '0')}`;
+
+  let student: any = null;
+  if (prisma) {
+    try {
+      student = await prisma.student.create({
+        data: {
+          studentIdNumber,
+          studentId: studentIdNumber,
+          name: lead.studentName,
+          fullName: lead.studentName,
+          email: lead.email,
+          phone: lead.phone,
+          courseId: targetCourseId,
+          admissionDate: new Date(),
+          feeStatus: feeStatus as any,
+          studentStatus: 'ACTIVE',
+          enrollmentStatus: 'ACTIVE',
+          convertedFromLeadId: lead.id,
+          isDemoData: false,
+        },
+      });
+
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: {
+          stage: 'Enrolled',
+          convertedToStudentId: student.id,
+        },
+      });
+    } catch (dbErr: any) {
+      logger.warn({ err: dbErr }, 'Failed to convert lead in PostgreSQL, using memory fallback');
+    }
+  }
+
+  if (!student) {
+    student = {
+      id: `stu-${Date.now()}`,
+      studentIdNumber,
+      studentId: studentIdNumber,
+      name: lead.studentName,
+      fullName: lead.studentName,
+      email: lead.email,
+      phone: lead.phone,
+      courseId: targetCourseId,
+      admissionDate: new Date().toISOString(),
+      feeStatus,
+      studentStatus: 'ACTIVE',
+      enrollmentStatus: 'ACTIVE',
+      isDemoData: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    store.getState().students.unshift(student);
+  }
+
+  const memLead = store.getState().leads.find((l) => l.id === id);
+  if (memLead) {
+    memLead.stage = 'Enrolled';
+    (memLead as any).convertedToStudentId = student.id;
+  }
+
+  store.logAudit({
+    userId: req.user?.id,
+    userEmail: req.user?.email,
+    action: 'LEAD_CONVERTED_TO_STUDENT',
+    entityType: 'Student',
+    entityId: student.id,
+    details: { leadId: lead.id, studentIdNumber, studentName: student.name },
+  });
+
+  return res.status(201).json({
+    success: true,
+    message: 'Lead converted to student record successfully',
+    student,
+    lead: { ...lead, stage: 'Enrolled', convertedToStudentId: student.id },
   });
 });
 

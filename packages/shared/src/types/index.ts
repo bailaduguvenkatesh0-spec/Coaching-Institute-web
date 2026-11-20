@@ -231,9 +231,11 @@ export interface CSVImportResult {
   validRows: number;
   rejectedRows: number;
   duplicateRows: number;
-  errors: { row: number; error: string; data?: Record<string, unknown> }[];
+  errors: { row: number; error: string; data?: any }[];
   importedRecordsCount: number;
   status: 'COMPLETED' | 'PARTIAL' | 'FAILED';
+  validRecords?: any[];
+  committed?: boolean;
 }
 
 // System Settings Type

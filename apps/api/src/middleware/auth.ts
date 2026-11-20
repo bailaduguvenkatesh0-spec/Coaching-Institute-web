@@ -3,12 +3,13 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import { UserRole } from '@team-b/shared';
 import { store } from '../store/index.js';
+import { getPrisma } from '../prisma.js';
 
 export interface AuthenticatedUser {
   id: string;
   email: string;
   name: string;
-  role: UserRole;
+  role: UserRole | string;
 }
 
 declare global {
@@ -19,7 +20,7 @@ declare global {
   }
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   let token: string | undefined;
 
   // 1. Check cookies (httpOnly)
@@ -43,10 +44,25 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    const decoded = jwt.verify(token, config.jwtSecret) as AuthenticatedUser;
-    // Verify user exists and is active
-    const user = store.getState().users.find((u) => u.id === decoded.id);
-    if (!user || !user.isActive) {
+    const decoded = jwt.verify(token, config.jwtSecret) as any;
+    let user: any = null;
+
+    // Check PostgreSQL first if available
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: decoded.id },
+        });
+      } catch {}
+    }
+
+    // Fallback to in-memory store
+    if (!user) {
+      user = store.getState().users.find((u) => u.id === decoded.id || u.email.toLowerCase() === decoded.email?.toLowerCase());
+    }
+
+    if (!user || user.isActive === false) {
       return res.status(401).json({
         success: false,
         error: 'User account not found or deactivated.',
@@ -72,7 +88,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
  * Server-side RBAC middleware.
  * Enforces server-side permissions (UI hiding alone is never enough).
  */
-export function requireRole(...allowedRoles: UserRole[]) {
+export function requireRole(...allowedRoles: (UserRole | string)[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
@@ -81,10 +97,33 @@ export function requireRole(...allowedRoles: UserRole[]) {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = req.user.role;
+    // Admins always have access
+    if (userRole === 'ADMIN') {
+      return next();
+    }
+
+    // Role aliases & hierarchy
+    const roleAliases: Record<string, string[]> = {
+      COUNSELLOR: ['COUNSELLOR', 'ADMISSIONS_COUNSELLOR'],
+      ADMISSIONS_COUNSELLOR: ['COUNSELLOR', 'ADMISSIONS_COUNSELLOR'],
+      FACULTY: ['FACULTY', 'TEACHER'],
+      TEACHER: ['FACULTY', 'TEACHER'],
+      MANAGER: ['MANAGER', 'ACADEMIC_COORDINATOR'],
+      ACADEMIC_COORDINATOR: ['MANAGER', 'ACADEMIC_COORDINATOR'],
+    };
+
+    const expandedAllowed = new Set<string>();
+    for (const r of allowedRoles) {
+      expandedAllowed.add(r);
+      const aliases = roleAliases[r];
+      if (aliases) aliases.forEach((a) => expandedAllowed.add(a));
+    }
+
+    if (!expandedAllowed.has(userRole)) {
       return res.status(403).json({
         success: false,
-        error: `Forbidden. Role '${req.user.role}' is not authorized for this resource.`,
+        error: `Forbidden. Role '${userRole}' is not authorized for this resource.`,
       });
     }
 

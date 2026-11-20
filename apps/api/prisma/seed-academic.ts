@@ -91,7 +91,7 @@ export async function seedAcademicData() {
       where: { studentId_classId: { studentId: e.studentId, classId: e.classId } },
       update: { status: 'ACTIVE' },
       create: {
-        id: `enr-${e.studentId}-${e.classId}`,
+        id: `enr-${e.studentId}`,
         studentId: e.studentId,
         classId: e.classId,
         status: 'ACTIVE',
@@ -116,7 +116,7 @@ export async function seedAcademicData() {
       where: { studentId_classId: { studentId: s.id, classId } },
       update: { status: 'ACTIVE' },
       create: {
-        id: `enr-${s.id}-${classId}`,
+        id: `enr-${s.id}`,
         studentId: s.id,
         classId,
         status: 'ACTIVE',
@@ -348,3 +348,4 @@ if (process.argv[1]?.includes('seed-academic')) {
       await prisma.$disconnect();
     });
 }
+

@@ -38,6 +38,7 @@ export const OverviewDashboard: React.FC = () => {
 
   const admMetrics = admData?.metrics || {};
   const acadMetrics = acadData?.metrics || {};
+  const isLiveDb = admData?.storage?.mode === 'postgresql-prisma' || acadData?.storage?.mode === 'postgresql-prisma';
 
   const scoreColors: Record<string, string> = {
     hot: '#f43f5e',
@@ -61,9 +62,11 @@ export const OverviewDashboard: React.FC = () => {
           <div>
             <div className="flex items-center space-x-2">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">
-                SOLO DEVELOPER SUBMISSION
+                ENTERPRISE SYSTEM
               </span>
-              <Badge variant="simulated">MOCK ADAPTER ACTIVE</Badge>
+              <Badge variant={isLiveDb ? 'success' : 'simulated'}>
+                {isLiveDb ? 'LIVE DATABASE CONNECTED' : 'OFFLINE DEMO MODE'}
+              </Badge>
             </div>
             <h2 className="text-2xl font-bold text-white mt-2">Executive AI Automation Command Center</h2>
             <p className="text-sm text-slate-400 mt-1 max-w-2xl">

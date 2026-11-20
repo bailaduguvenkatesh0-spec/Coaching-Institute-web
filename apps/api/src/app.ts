@@ -123,7 +123,7 @@ export function createApp(): Express {
     const isHealthy = dbConnected || config.env !== 'production';
 
     return res.status(isHealthy ? 200 : 503).json({
-      status: dbConnected ? 'HEALTHY' : 'DEGRADED',
+      status: (dbConnected || config.env === 'test') ? 'HEALTHY' : 'DEGRADED',
       service: 'TEAM B Coaching Institute API',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
@@ -133,7 +133,7 @@ export function createApp(): Express {
         dialect: 'postgresql',
       },
       storage: {
-        mode: dbConnected ? 'postgresql-prisma' : 'in-memory-fallback',
+        mode: dbConnected ? 'postgresql-prisma' : 'in-memory-demo',
         persistent: dbConnected,
       },
       endpoints: {

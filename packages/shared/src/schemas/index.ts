@@ -20,7 +20,18 @@ export const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   name: z.string().min(2, 'Name must have at least 2 characters'),
-  role: z.enum(['ADMIN', 'ADMISSIONS_COUNSELLOR', 'ACADEMIC_COORDINATOR', 'TEACHER']).default('TEACHER'),
+  role: z.enum([
+    'ADMIN',
+    'MANAGER',
+    'COUNSELLOR',
+    'FACULTY',
+    'ACCOUNTANT',
+    'STUDENT',
+    'PARENT',
+    'ADMISSIONS_COUNSELLOR',
+    'ACADEMIC_COORDINATOR',
+    'TEACHER',
+  ]).default('FACULTY'),
 });
 
 // Project 1: Admissions Schemas

@@ -274,32 +274,36 @@ router.get('/students/:id', authenticate, async (req: Request, res: Response) =>
     const prisma = getPrisma();
 
     if (prisma) {
-      const student = await prisma.student.findFirst({
-        where: {
-          OR: [{ id }, { studentIdNumber: id }, { studentId: id }],
-        },
-        include: {
-          course: true,
-          attendanceRecords: { take: 10, orderBy: { date: 'desc' } },
-        },
-      });
-
-      if (student) {
-        return res.json({
-          success: true,
-          student: {
-            ...student,
-            studentId: student.studentIdNumber || student.studentId,
-            fullName: student.name,
-            courseName: student.course?.title || 'Unassigned',
-            metrics,
-            guardian: guardian ? { ...guardian, preference: pref } : null,
-            class: targetClass,
-            attendanceRecords: attRecords.length > 0 ? attRecords : student.attendanceRecords,
-            engagementFlags: flags,
-            tasks,
+      try {
+        const student = await prisma.student.findFirst({
+          where: {
+            OR: [{ id }, { studentIdNumber: id }, { studentId: id }],
+          },
+          include: {
+            course: true,
+            attendanceRecords: { take: 10, orderBy: { date: 'desc' } },
           },
         });
+
+        if (student) {
+          return res.json({
+            success: true,
+            student: {
+              ...student,
+              studentId: student.studentIdNumber || student.studentId,
+              fullName: student.name,
+              courseName: student.course?.title || 'Unassigned',
+              metrics,
+              guardian: guardian ? { ...guardian, preference: pref } : null,
+              class: targetClass,
+              attendanceRecords: attRecords.length > 0 ? attRecords : student.attendanceRecords,
+              engagementFlags: flags,
+              tasks,
+            },
+          });
+        }
+      } catch (dbErr) {
+        // Fall back to in-memory store if DB is offline
       }
     }
 

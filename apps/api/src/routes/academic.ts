@@ -13,10 +13,12 @@ import {
 import { store } from '../store/index.js';
 import {
   processAttendanceImport,
+  processAttendanceImportAsync,
   evaluateStudentAtRiskRules,
   generateWeeklySummary,
 } from '../services/academicService.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { getPrisma } from '../prisma.js';
 
 const router = Router();
 
@@ -115,7 +117,7 @@ router.post(
   '/imports/attendance',
   authenticate,
   requireRole('ADMIN', 'ACADEMIC_COORDINATOR', 'TEACHER'),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const { rows, fileName, commit = true } = req.body;
 
     if (!Array.isArray(rows)) {
@@ -125,7 +127,7 @@ router.post(
       });
     }
 
-    const result = processAttendanceImport(rows, fileName, commit);
+    const result = await processAttendanceImportAsync(rows, fileName, commit);
 
     store.logAudit({
       userId: req.user?.id,
@@ -275,7 +277,7 @@ router.post(
   '/attendance/import',
   authenticate,
   requireRole('ADMIN', 'ACADEMIC_COORDINATOR', 'TEACHER'),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const { rows, fileName, commit = true } = req.body;
     if (!Array.isArray(rows)) {
       return res.status(400).json({
@@ -284,7 +286,7 @@ router.post(
       });
     }
 
-    const result = processAttendanceImport(rows, fileName, commit);
+    const result = await processAttendanceImportAsync(rows, fileName, commit);
     return res.json({ success: true, result });
   }
 );
@@ -620,13 +622,46 @@ router.post(
 );
 
 // GET /api/academic/analytics
-router.get('/academic/analytics', authenticate, (req: Request, res: Response) => {
-  const students = store.getState().students;
-  const attRecords = store.getState().attendanceRecords;
-  const flags = store.getState().engagementFlags;
-  const tasks = store.getState().interventionTasks;
-  const messages = store.getState().messageApprovals;
-  const classes = store.getState().classes;
+router.get('/academic/analytics', authenticate, async (req: Request, res: Response) => {
+  const prisma = getPrisma();
+  let students: any[] = [];
+  let attRecords: any[] = [];
+  let flags: any[] = [];
+  let tasks: any[] = [];
+  let messages: any[] = [];
+  let classes: any[] = [];
+  let isDb = false;
+
+  if (prisma) {
+    try {
+      const [dbStudents, dbRecords, dbFlags, dbTasks, dbMessages, dbClasses] = await Promise.all([
+        prisma.student.findMany(),
+        prisma.attendanceRecord.findMany(),
+        prisma.engagementFlag.findMany(),
+        prisma.interventionTask.findMany(),
+        prisma.messageApproval.findMany(),
+        prisma.class.findMany({ include: { enrolments: true } }),
+      ]);
+      if (dbRecords.length > 0 || dbStudents.length > 0) {
+        students = dbStudents;
+        attRecords = dbRecords;
+        flags = dbFlags;
+        tasks = dbTasks;
+        messages = dbMessages;
+        classes = dbClasses;
+        isDb = true;
+      }
+    } catch {}
+  }
+
+  if (!isDb) {
+    students = store.getState().students;
+    attRecords = store.getState().attendanceRecords;
+    flags = store.getState().engagementFlags;
+    tasks = store.getState().interventionTasks;
+    messages = store.getState().messageApprovals;
+    classes = store.getState().classes;
+  }
 
   const totalStudents = students.length;
   const activeFlagsCount = flags.filter((f) => f.status === 'ACTIVE').length;
@@ -634,9 +669,15 @@ router.get('/academic/analytics', authenticate, (req: Request, res: Response) =>
 
   // Class-wise attendance percentages
   const classWise = classes.map((cls) => {
-    const enrolments = store.getState().enrolments.filter((e) => e.classId === cls.id);
-    const studentIds = new Set(enrolments.map((e) => e.studentId));
-    const clsRecords = attRecords.filter((r) => studentIds.has(r.studentId) && r.classId === cls.id);
+    let studentIds = new Set<string>();
+    if (cls.enrolments && Array.isArray(cls.enrolments)) {
+      cls.enrolments.forEach((e: any) => studentIds.add(e.studentId));
+    } else {
+      const enrolments = store.getState().enrolments.filter((e) => e.classId === cls.id);
+      enrolments.forEach((e) => studentIds.add(e.studentId));
+    }
+
+    const clsRecords = attRecords.filter((r) => r.classId === cls.id);
 
     let present = 0;
     let excused = 0;
@@ -684,6 +725,10 @@ router.get('/academic/analytics', authenticate, (req: Request, res: Response) =>
 
   return res.json({
     success: true,
+    storage: {
+      mode: isDb ? 'postgresql-prisma' : 'in-memory-demo',
+      persistent: isDb,
+    },
     metrics: {
       totalStudents,
       overallAttendancePercent: Math.min(100, overallAttendancePercent),
